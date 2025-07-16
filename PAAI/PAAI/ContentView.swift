@@ -3,6 +3,7 @@ import EventKit
 import MapKit
 import Combine
 
+// MARK: - Models
 struct Message: Identifiable, Codable {
     let id: String
     let contact: String
@@ -26,6 +27,7 @@ struct BlockchainStats: Codable {
     }
 }
 
+// MARK: - Main Content View
 struct ContentView: View {
     @State private var address = ""
     @State private var mnemonic = ""
@@ -34,77 +36,68 @@ struct ContentView: View {
     @State private var errorMessage = ""
     @State private var path = NavigationPath()
     @StateObject private var assistantService = AssistantService.shared
+    @StateObject private var tlsService = TLSBlockchainService.shared
 
     private let walletService = WalletService.shared
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack {
-                Spacer()
-                VStack(spacing: 20) {
-                    TextField("Enter Wallet Address", text: $address)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .frame(height: 40)
-                        .disableInputAccessoryView()
-                        .padding(.horizontal)
-                    SecureField("Enter Mnemonic", text: $mnemonic)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .frame(height: 40)
-                        .disableInputAccessoryView()
-                        .padding(.horizontal)
-                    Button("Sign In") {
-                        guard !isCheckingLogin else { return }
-                        isCheckingLogin = true
-                        print("Attempting sign-in with address: \(address), mnemonic: \(mnemonic)")
-                        if address.isEmpty || mnemonic.isEmpty {
-                            errorMessage = "Both address and mnemonic are required"
-                            showError = true
-                            isCheckingLogin = false
-                            return
+            ZStack {
+                // Background
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack(spacing: DesignSystem.Spacing.xl) {
+                    Spacer()
+                    
+                    // Logo and Branding
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        Image("ZeroaBanner")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 80)
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        Text("PAAI")
+                            .font(DesignSystem.Typography.titleLarge)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Text("Your AI Assistant")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Login Form
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        InputField("Enter Wallet Address", text: $address)
+                        InputField("Enter Mnemonic", text: $mnemonic, isSecure: true)
+                        
+                        PrimaryButton("Sign In", isLoading: isCheckingLogin) {
+                            handleSignIn()
                         }
-                        walletService.importMnemonic(mnemonic) { success, derivedAddress in
-                            print("Import result: success=\(success), derivedAddress=\(derivedAddress ?? "nil")")
-                            if success, derivedAddress == address {
-                                print("Login successful, navigating to home")
-                                path.append("home")
-                            } else {
-                                errorMessage = "Invalid address or mnemonic"
-                                showError = true
-                            }
-                            isCheckingLogin = false
+                        
+                        SecondaryButton("Create New Account") {
+                            path.append("create")
                         }
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color(hex: "#b37fc6"))
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 25))
-                    .font(.custom("AbadiMTProBold", size: 16))
-                    .padding(.horizontal)
-                    .disabled(isCheckingLogin)
-                    NavigationLink("Create New Account", value: "create")
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color(hex: "#d6b8db"))
-                        .foregroundColor(Color(hex: "#803a99"))
-                        .clipShape(RoundedRectangle(cornerRadius: 25))
-                        .font(.custom("AbadiMTProBold", size: 16))
-                        .padding(.horizontal)
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    
+                    Spacer()
                 }
-                Spacer()
             }
             .navigationTitle("")
             .navigationBarHidden(true)
-            .background(Color(hex: "#4f225b"))
-            .alert(isPresented: $showError) {
-                Alert(title: Text("Error"), message: Text(errorMessage), dismissButton: .default(Text("OK")))
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
             }
             .navigationDestination(for: String.self) { value in
                 switch value {
                 case "home":
-                    HomeView(path: $path, assistantService: assistantService)
+                    HomeView(path: $path, assistantService: assistantService, tlsService: tlsService)
                 case "create":
                     CreateAccountView(path: $path)
                 case "prioritization":
@@ -123,126 +116,169 @@ struct ContentView: View {
         }
     }
 
+    private func handleSignIn() {
+        guard !isCheckingLogin else { return }
+        isCheckingLogin = true
+        
+        if address.isEmpty || mnemonic.isEmpty {
+            errorMessage = "Both address and mnemonic are required"
+            showError = true
+            isCheckingLogin = false
+            return
+        }
+        
+        walletService.importMnemonic(mnemonic) { success, derivedAddress in
+            if success, derivedAddress == address {
+                path.append("home")
+            } else {
+                errorMessage = "Invalid address or mnemonic"
+                showError = true
+            }
+            isCheckingLogin = false
+        }
+    }
+
     private func checkAutoLogin() {
         guard !isCheckingLogin else { return }
         isCheckingLogin = true
+        
         if let savedAddress = walletService.loadAddress(),
            let savedMnemonic = walletService.keychain.read(key: "wallet_mnemonic") {
-            print("Auto-login: address=\(savedAddress), mnemonic=\(savedMnemonic)")
             walletService.importMnemonic(savedMnemonic) { success, derivedAddress in
-                print("Auto-login import: success=\(success), derivedAddress=\(derivedAddress ?? "nil")")
                 if success, derivedAddress == savedAddress {
-                    print("Auto-login successful")
                     path.append("home")
                 }
                 isCheckingLogin = false
             }
         } else {
-            print("No auto-login credentials found")
             isCheckingLogin = false
         }
     }
 }
 
-struct DisableInputAccessoryView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        return UIView()
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-}
-
-extension View {
-    func disableInputAccessoryView() -> some View {
-        self.background(DisableInputAccessoryView())
-    }
-}
-
+// MARK: - Create Account View
 struct CreateAccountView: View {
     @Binding var path: NavigationPath
     @State private var mnemonic = ""
     @State private var hasWrittenDown = false
     @State private var showMnemonic = false
     @State private var showConfirm = false
+    @State private var isCreating = false
     private let walletService = WalletService.shared
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("Create Account")
-                    .font(.custom("AbadiMTProBold", size: 28))
-                    .foregroundColor(Color(hex: "#803a99"))
-                    .padding(.top, 40)
-                HStack {
-                    Text(showMnemonic ? mnemonic : String(repeating: "•", count: 32))
-                        .font(.custom("AzoSansRegular", size: 14))
-                        .padding()
-                    Button(action: { showMnemonic.toggle() }) {
-                        Image(systemName: showMnemonic ? "eye.slash" : "eye")
-                            .foregroundColor(.white)
-                    }
-                    Button(action: {
-                        UIPasteboard.general.string = mnemonic
-                    }) {
-                        Image(systemName: "doc.on.doc")
-                            .foregroundColor(.white)
-                    }
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.xl) {
+                // Header
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    Text("Create Account")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("Write down your recovery phrase")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.horizontal)
-                .background(Color(hex: "#4f225b").opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                Toggle("I have written this down", isOn: $hasWrittenDown)
-                    .font(.custom("AzoSansRegular", size: 16))
-                    .padding(.horizontal)
-                Button("Proceed") {
-                    showConfirm = true
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(hasWrittenDown ? Color(hex: "#b37fc6") : Color(hex: "#4f225b").opacity(0.5))
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 25))
-                .font(.custom("AbadiMTProBold", size: 16))
-                .padding(.horizontal)
-                .disabled(!hasWrittenDown)
+                .padding(.top, DesignSystem.Spacing.xxl)
+                
                 Spacer()
-            }
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") { path = NavigationPath() }
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .foregroundColor(Color(hex: "#803a99"))
-                }
-            }
-            .background(Color(hex: "#4f225b"))
-            .alert(isPresented: $showConfirm) {
-                Alert(
-                    title: Text("Confirm"),
-                    message: Text("Are you sure you want to proceed?"),
-                    primaryButton: .default(Text("Yes")) {
-                        walletService.importMnemonic(mnemonic) { success, _ in
-                            if success {
-                                path = NavigationPath() // Reset to main screen
+                
+                // Mnemonic Display
+                CardView {
+                    VStack(spacing: DesignSystem.Spacing.md) {
+                        HStack {
+                            Text(showMnemonic ? mnemonic : String(repeating: "•", count: 32))
+                                .font(DesignSystem.Typography.bodyMedium)
+                                .foregroundColor(DesignSystem.Colors.text)
+                                .multilineTextAlignment(.leading)
+                            
+                            Spacer()
+                            
+                            VStack(spacing: DesignSystem.Spacing.sm) {
+                                Button(action: { showMnemonic.toggle() }) {
+                                    Image(systemName: showMnemonic ? "eye.slash" : "eye")
+                                        .foregroundColor(DesignSystem.Colors.secondary)
+                                        .font(.system(size: 20))
+                                }
+                                
+                                Button(action: {
+                                    UIPasteboard.general.string = mnemonic
+                                }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .foregroundColor(DesignSystem.Colors.secondary)
+                                        .font(.system(size: 20))
+                                }
                             }
                         }
-                    },
-                    secondaryButton: .cancel()
-                )
+                        
+                        Text("Tap to show/hide • Copy to clipboard")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                // Confirmation Toggle
+                Toggle("I have written this down securely", isOn: $hasWrittenDown)
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                // Action Buttons
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    PrimaryButton("Create Account", isLoading: isCreating) {
+                        showConfirm = true
+                    }
+                    .disabled(!hasWrittenDown)
+                    
+                    SecondaryButton("Back to Login") {
+                        path = NavigationPath()
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                Spacer()
             }
-            .onAppear {
-                mnemonic = walletService.generateMnemonic()
+        }
+        .navigationBarHidden(true)
+        .alert("Confirm Account Creation", isPresented: $showConfirm) {
+            Button("Create Account") {
+                createAccount()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to create this account? Make sure you've written down your recovery phrase.")
+        }
+        .onAppear {
+            mnemonic = walletService.generateMnemonic()
+        }
+    }
+    
+    private func createAccount() {
+        isCreating = true
+        walletService.importMnemonic(mnemonic) { success, _ in
+            isCreating = false
+            if success {
+                path = NavigationPath()
             }
         }
     }
 }
 
+// MARK: - Home View
 struct HomeView: View {
     @Binding var path: NavigationPath
     @ObservedObject var assistantService: AssistantService
+    @ObservedObject var tlsService: TLSBlockchainService
     @State private var commandInput = ""
     @State private var isSubscribed = false
     @State private var isInitializing = false
+    @State private var showSubscriptionAlert = false
+    @State private var showLogoutAlert = false
     @State private var chain: String?
     @State private var blockHeight: Int?
     @State private var lastBlockHash: String?
@@ -254,73 +290,26 @@ struct HomeView: View {
     private let networkService = NetworkService.shared
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                VStack(spacing: 20) {
-                    if isInitializing {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "#803a99")))
-                    } else if !isSubscribed {
-                        VStack(spacing: 20) {
-                            Text("Subscription Required")
-                                .font(.custom("AbadiMTProBold", size: 24))
-                                .foregroundColor(Color(hex: "#803a99"))
-                            Button("Pay Now") {
-                                isSubscribed = walletService.sendPayment()
-                            }
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color(hex: "#b37fc6"))
-                            .foregroundColor(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 25))
-                            .font(.custom("AbadiMTProBold", size: 16))
-                            .padding(.horizontal)
-                        }
-                    } else {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            TextField("How may I help you?", text: $commandInput)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .font(.custom("AzoSansRegular", size: 16))
-                                .frame(height: 40)
-                                .disableInputAccessoryView()
-                                .padding(.horizontal)
-                            Button(action: {
-                                handleCommand()
-                            }) {
-                                Image(systemName: "paperplane.fill")
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .background(Color(hex: "#b37fc6"))
-                                    .clipShape(Circle())
-                            }
-                            Spacer()
-                        }
-                        if let chain = chain, let blockHeight = blockHeight,
-                           let lastBlockHash = lastBlockHash, let networkHashrate = networkHashrate {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Chain: \(chain)")
-                                    .font(.custom("AzoSansRegular", size: 14))
-                                Text("Block Height: \(blockHeight)")
-                                    .font(.custom("AzoSansRegular", size: 14))
-                                Text("Last Block Hash: \(lastBlockHash)")
-                                    .font(.custom("AzoSansRegular", size: 14))
-                                Text("Network Hashrate: \(String(format: "%.2f", networkHashrate)) GH/s")
-                                    .font(.custom("AzoSansRegular", size: 14))
-                            }
-                            .padding()
-                            .background(Color(hex: "#4f225b").opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .padding(.horizontal)
-                        }
-                        Spacer()
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header
+                HStack {
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                        Text("Welcome back")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        
+                        Text(walletService.loadAddress() ?? "Unknown")
+                            .font(DesignSystem.Typography.headline)
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .lineLimit(1)
                     }
+                    
                     Spacer()
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                    
                     Menu {
                         Button("Sign Message") {
                             commandInput = "sign message Hello"
@@ -334,46 +323,173 @@ struct HomeView: View {
                             commandInput = "tell main stats"
                             handleCommand()
                         }
+                        Button("Logout", role: .destructive) {
+                            showLogoutAlert = true
+                        }
                     } label: {
                         Image(systemName: "line.3.horizontal")
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color(hex: "#803a99"))
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
                             .clipShape(Circle())
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        path.append("userPortal")
-                    }) {
-                        Image(systemName: "person.circle.fill")
-                            .resizable()
-                            .frame(width: 30, height: 30)
-                            .foregroundColor(Color(hex: "#803a99"))
-                    }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                if isInitializing {
+                    LoadingView(message: "Initializing...")
+                } else if !isSubscribed {
+                    subscriptionView
+                } else {
+                    mainContentView
                 }
-            }
-            .background(Color(hex: "#4f225b"))
-            .alert(isPresented: $showAlert) {
-                Alert(title: Text("Success"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                
+                Spacer()
             }
         }
+        .navigationBarHidden(true)
+        .alert("Success", isPresented: $showAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
+        }
+        .alert("Logout", isPresented: $showLogoutAlert) {
+            Button("Logout", role: .destructive) {
+                logout()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to logout?")
+        }
+        .onAppear {
+            initialize()
+        }
     }
-
+    
+    private var subscriptionView: some View {
+        VStack(spacing: DesignSystem.Spacing.xl) {
+            Spacer()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 60))
+                    .foregroundColor(DesignSystem.Colors.secondary)
+                
+                Text("Subscription Required")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                
+                Text("To access AI services, please complete your subscription payment.")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    PrimaryButton("Pay with TLS", isLoading: false) {
+                        Task {
+                            await processSubscription()
+                        }
+                    }
+                    
+                    Text("10 TLS / month")
+                        .font(DesignSystem.Typography.bodySmall)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+            .padding(DesignSystem.Spacing.xl)
+            
+            Spacer()
+        }
+    }
+    
+    private var mainContentView: some View {
+        VStack(spacing: DesignSystem.Spacing.lg) {
+            // AI Chat Interface
+            VStack(spacing: DesignSystem.Spacing.md) {
+                HStack {
+                    InputField("How may I help you?", text: $commandInput)
+                    
+                    Button(action: {
+                        handleCommand()
+                    }) {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundColor(.white)
+                            .font(.system(size: 18))
+                            .padding(DesignSystem.Spacing.md)
+                            .background(DesignSystem.Colors.secondary)
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                // Blockchain Stats Card
+                if let chain = chain, let blockHeight = blockHeight,
+                   let lastBlockHash = lastBlockHash, let networkHashrate = networkHashrate {
+                    CardView {
+                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                            Text("Blockchain Stats")
+                                .font(DesignSystem.Typography.headline)
+                                .foregroundColor(DesignSystem.Colors.text)
+                            
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                Text("Chain: \(chain)")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                Text("Block Height: \(blockHeight)")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                Text("Hashrate: \(String(format: "%.2f", networkHashrate)) GH/s")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                }
+            }
+            
+            Spacer()
+        }
+    }
+    
     private func initialize() {
         guard !isInitializing else { return }
         isInitializing = true
+        
         walletService.initialize {
             isSubscribed = walletService.checkSubscription()
             fetchBlockchainInfo()
             loadAndPrioritizeMessages()
+            Task {
+                await tlsService.refreshBalance()
+            }
             isInitializing = false
         }
+    }
+    
+    private func processSubscription() async {
+        let success = await tlsService.processSubscriptionPayment()
+        await MainActor.run {
+            if success {
+                isSubscribed = true
+                alertMessage = "Subscription activated successfully!"
+                showAlert = true
+            } else {
+                alertMessage = "Payment failed. Please try again."
+                showAlert = true
+            }
+        }
+    }
+    
+    private func logout() {
+        walletService.clear()
+        path = NavigationPath()
     }
 
     private func fetchBlockchainInfo() {
         guard let statsURL = URL(string: "https://telestai.cryptoscope.io/api/stats/") else {
-            print("Invalid stats API URL")
             DispatchQueue.main.async {
                 self.chain = "Main"
                 self.blockHeight = 123456
@@ -382,6 +498,7 @@ struct HomeView: View {
             }
             return
         }
+        
         URLSession.shared.dataTask(with: statsURL) { data, response, error in
             if let error = error {
                 print("Stats fetch error: \(error.localizedDescription)")
@@ -393,9 +510,9 @@ struct HomeView: View {
                 }
                 return
             }
+            
             guard let data = data,
                   let stats = try? JSONDecoder().decode(BlockchainStats.self, from: data) else {
-                print("Stats decode error: \(String(data: data ?? Data(), encoding: .utf8) ?? "No data")")
                 DispatchQueue.main.async {
                     self.chain = "Main"
                     self.blockHeight = 123456
@@ -404,6 +521,7 @@ struct HomeView: View {
                 }
                 return
             }
+            
             DispatchQueue.main.async {
                 self.chain = stats.chain
                 self.blockHeight = stats.blockHeight
@@ -419,6 +537,7 @@ struct HomeView: View {
             Message(id: UUID().uuidString, contact: "Boss", content: "URGENT: Review report", timestamp: "2025-07-14T00:05:00Z", viewed: false, priority: 0),
             Message(id: UUID().uuidString, contact: "Mom", content: "Call me back", timestamp: "2025-07-14T00:10:00Z", viewed: false, priority: 0)
         ]
+        
         var contactRanks = ["John": 5, "Boss": 10, "Mom": 3]
         if let ranksData = walletService.keychain.read(key: "contact_ranks"),
            let ranks = try? JSONSerialization.jsonObject(with: Data(ranksData.utf8)) as? [String: Int] {
@@ -428,11 +547,13 @@ struct HomeView: View {
                 _ = walletService.keychain.save(key: "contact_ranks", value: String(data: ranksData, encoding: .utf8)!)
             }
         }
+        
         prioritizedMessages = newMessages.map { msg in
             let baseRank = contactRanks[msg.contact] ?? 1
             let urgencyRank = msg.content.lowercased().contains("urgent") ? 20 : 0
             return Message(id: msg.id, contact: msg.contact, content: msg.content, timestamp: msg.timestamp, viewed: msg.viewed, priority: baseRank + urgencyRank)
         }.sorted { $0.priority > $1.priority }
+        
         if let messagesData = try? JSONSerialization.data(withJSONObject: prioritizedMessages.map { [
             "id": $0.id,
             "contact": $0.contact,
@@ -447,15 +568,29 @@ struct HomeView: View {
 
     private func handleCommand() {
         guard isSubscribed, !commandInput.isEmpty else {
-            alertMessage = "Subscription required or empty input"
-            showAlert = true
-            assistantService.speak(alertMessage)
+            if !isSubscribed {
+                showSubscriptionAlert = true
+            } else {
+                alertMessage = "Please enter a command"
+                showAlert = true
+            }
+            assistantService.speak("Subscription required or empty input")
             return
         }
-        let input = "Parse this command: \"\(commandInput)\". Identify the action (e.g., \"add meeting\", \"schedule meeting\", \"open maps\", \"open safari\", \"prioritize messages\", \"tell main stats\", \"sign message\", \"open user portal\", \"toggle stream\") and return only a JSON object with \"action\" (string), and relevant parameters (e.g., \"title\", \"start\", \"end\" for meetings, \"location\" for maps, \"url\" for safari, \"message\" for sign message). Use UTC timezone and assume today is 2025-07-15."
-        print("Sending Grok API request: \(input)")
-        networkService.getGrokResponse(input: input) { result in
-            print("Grok API result: \(result)")
+        
+        let enhancedPrompt = """
+        Parse this command: "\(commandInput)". 
+        
+        Identify the action and return a JSON object with:
+        - "action": string (e.g., "add meeting", "schedule meeting", "open maps", "open safari", "prioritize messages", "tell main stats", "sign message", "open user portal", "toggle stream", "check balance", "send payment")
+        - "parameters": object with relevant data (e.g., "title", "start", "end" for meetings, "location" for maps, "url" for safari, "message" for sign message, "amount" for payments)
+        
+        Use UTC timezone and assume today is 2025-07-15. Provide helpful, contextual responses.
+        """
+        
+        print("Sending enhanced AI request: \(enhancedPrompt)")
+        networkService.getGrokResponse(input: enhancedPrompt) { result in
+            print("Enhanced AI result: \(result)")
             switch result {
             case .success(let response):
                 assistantService.speak(response)
@@ -463,514 +598,218 @@ struct HomeView: View {
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let action = json["action"] as? String {
                     print("Parsed action: \(action), json: \(json)")
-                    switch action {
-                    case "add meeting", "schedule meeting":
-                        if let title = json["title"] as? String,
-                           let start = json["start"] as? String,
-                           let end = json["end"] as? String,
-                           let startDate = ISO8601DateFormatter().date(from: start),
-                           let endDate = ISO8601DateFormatter().date(from: end) {
-                            addToCalendar(title: title, start: startDate, end: endDate)
-                        } else {
-                            assistantService.speak("Invalid meeting details")
-                            alertMessage = "Invalid meeting details"
-                            showAlert = true
-                        }
-                    case "open maps":
-                        if let location = json["location"] as? String {
-                            openMaps(location: location)
-                        }
-                    case "open safari":
-                        if let url = json["url"] as? String {
-                            openURL(url: url)
-                        }
-                    case "prioritize messages":
-                        loadAndPrioritizeMessages()
-                        path.append("prioritization")
-                    case "tell main stats":
-                        fetchBlockchainInfo()
-                        path.append("stats")
-                    case "sign message":
-                        if let message = json["message"] as? String,
-                           let signature = walletService.signMessage(message) {
-                            let response = "Signed: \(message) (Signature: \(signature))"
-                            assistantService.speak(response)
-                            alertMessage = response
-                            showAlert = true
-                        } else {
-                            assistantService.speak("Failed to sign message")
-                            alertMessage = "Failed to sign message"
-                            showAlert = true
-                        }
-                    case "toggle stream":
-                        let newValue = !assistantService.isStreaming
-                        assistantService.toggleStreaming(newValue) { success in
-                            let response = "Data streaming \(success ? newValue ? "enabled" : "disabled" : "failed")"
-                            assistantService.speak(response)
-                            alertMessage = response
-                            showAlert = true
-                        }
-                    default:
-                        assistantService.speak("Unknown action")
-                        alertMessage = "Unknown action"
-                        showAlert = true
-                    }
-                } else {
-                    assistantService.speak("Invalid response format")
-                    alertMessage = "Invalid response format"
-                    showAlert = true
+                    handleAction(action: action, parameters: json)
                 }
-            case .failure:
-                print("Grok API failed, using mock response")
-                if commandInput.lowercased().contains("add meeting") || commandInput.lowercased().contains("schedule meeting") {
-                    let title = commandInput.components(separatedBy: " ").dropFirst(2).joined(separator: " ").capitalized
-                    let startDate = ISO8601DateFormatter().date(from: "2025-07-16T15:00:00Z") ?? Date()
-                    let endDate = Calendar.current.date(byAdding: .hour, value: 1, to: startDate) ?? Date()
-                    addToCalendar(title: title, start: startDate, end: endDate)
-                } else if commandInput.contains("open maps") {
-                    openMaps(location: "Sydney")
-                } else if commandInput.contains("open safari") {
-                    openURL(url: "https://www.example.com")
-                } else if commandInput.contains("prioritize messages") {
-                    loadAndPrioritizeMessages()
-                    path.append("prioritization")
-                } else if commandInput.contains("tell main stats") {
-                    fetchBlockchainInfo()
-                    path.append("stats")
-                } else if commandInput.contains("sign message") {
-                    if let signature = walletService.signMessage("Hello") {
-                        let response = "Signed: Hello (Signature: \(signature))"
-                        assistantService.speak(response)
-                        alertMessage = response
-                        showAlert = true
-                    } else {
-                        assistantService.speak("Failed to sign message")
-                        alertMessage = "Failed to sign message"
-                        showAlert = true
-                    }
-                } else if commandInput.contains("toggle stream") {
-                    let newValue = !assistantService.isStreaming
-                    assistantService.toggleStreaming(newValue) { success in
-                        let response = "Data streaming \(success ? newValue ? "enabled" : "disabled" : "failed")"
-                        assistantService.speak(response)
-                        alertMessage = response
-                        showAlert = true
-                    }
-                } else {
-                    assistantService.speak("Error contacting Grok API")
-                    alertMessage = "Error contacting Grok API"
+            case .failure(let error):
+                print("AI request failed: \(error)")
+                assistantService.speak("I'm sorry, I couldn't process that request. Please try again.")
+            }
+        }
+    }
+    
+    private func handleAction(action: String, parameters: [String: Any]) {
+        switch action {
+        case "add meeting", "schedule meeting":
+            if let title = parameters["title"] as? String,
+               let start = parameters["start"] as? String,
+               let end = parameters["end"] as? String,
+               let startDate = ISO8601DateFormatter().date(from: start),
+               let endDate = ISO8601DateFormatter().date(from: end) {
+                addToCalendar(title: title, start: startDate, end: endDate)
+            } else {
+                assistantService.speak("I couldn't understand the meeting details. Please try again.")
+                alertMessage = "Invalid meeting details"
+                showAlert = true
+            }
+        case "open maps":
+            if let location = parameters["location"] as? String {
+                openMaps(location: location)
+            }
+        case "open safari":
+            if let url = parameters["url"] as? String {
+                openURL(url: url)
+            }
+        case "prioritize messages":
+            loadAndPrioritizeMessages()
+            path.append("prioritization")
+        case "tell main stats":
+            fetchBlockchainInfo()
+            path.append("stats")
+        case "sign message":
+            if let message = parameters["message"] as? String,
+               let signature = walletService.signMessage(message) {
+                let response = "Signed: \(message) (Signature: \(signature))"
+                assistantService.speak(response)
+                alertMessage = response
+                showAlert = true
+            }
+        case "check balance":
+            Task {
+                await tlsService.refreshBalance()
+                await MainActor.run {
+                    let balance = tlsService.formatBalance(tlsService.currentBalance)
+                    assistantService.speak("Your current balance is \(balance)")
+                    alertMessage = "Balance: \(balance)"
                     showAlert = true
                 }
             }
-            commandInput = ""
+        case "send payment":
+            if let toAddress = parameters["to"] as? String,
+               let amount = parameters["amount"] as? Double {
+                Task {
+                    let response = await tlsService.sendPayment(toAddress: toAddress, amount: amount)
+                    await MainActor.run {
+                        if response.success {
+                            assistantService.speak("Payment sent successfully. Transaction ID: \(response.txid ?? "Unknown")")
+                            alertMessage = "Payment successful! TXID: \(response.txid ?? "Unknown")"
+                        } else {
+                            assistantService.speak("Payment failed: \(response.error ?? "Unknown error")")
+                            alertMessage = "Payment failed: \(response.error ?? "Unknown error")"
+                        }
+                        showAlert = true
+                    }
+                }
+            }
+        default:
+            assistantService.speak("I understand you want to \(action). Let me help you with that.")
         }
     }
 
     private func addToCalendar(title: String, start: Date, end: Date) {
-        let store = EKEventStore()
-        store.requestFullAccessToEvents { granted, error in
-            if let error = error {
-                print("Calendar access error: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.assistantService.speak("Calendar access error")
-                    self.alertMessage = "Calendar access error"
-                    self.showAlert = true
-                }
-                return
-            }
-            guard granted else {
-                print("Calendar access denied")
-                DispatchQueue.main.async {
-                    self.assistantService.speak("Please allow calendar access in Settings")
-                    self.alertMessage = "Please allow calendar access in Settings"
-                    self.showAlert = true
-                }
-                return
-            }
-            let event = EKEvent(eventStore: store)
-            event.title = title
-            event.startDate = start
-            event.endDate = end
-            event.calendar = store.defaultCalendarForNewEvents
-            do {
-                try store.save(event, span: .thisEvent)
-                DispatchQueue.main.async {
-                    self.assistantService.speak("Event added: \(title)")
-                    self.alertMessage = "Event added: \(title)"
-                    self.showAlert = true
-                }
-            } catch {
-                print("Calendar save error: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.assistantService.speak("Failed to add event")
-                    self.alertMessage = "Failed to add event"
-                    self.showAlert = true
+        let eventStore = EKEventStore()
+        eventStore.requestAccess(to: .event) { granted, error in
+            if granted {
+                let event = EKEvent(eventStore: eventStore)
+                event.title = title
+                event.startDate = start
+                event.endDate = end
+                event.calendar = eventStore.defaultCalendarForNewEvents
+                
+                do {
+                    try eventStore.save(event, span: .thisEvent)
+                    DispatchQueue.main.async {
+                        self.assistantService.speak("Event added: \(title)")
+                        self.alertMessage = "Event added: \(title)"
+                        self.showAlert = true
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.assistantService.speak("Failed to add event")
+                        self.alertMessage = "Failed to add event"
+                        self.showAlert = true
+                    }
                 }
             }
         }
     }
 
     private func openMaps(location: String) {
-        let url = "http://maps.apple.com/?q=\(location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-        if let mapURL = URL(string: url) {
-            UIApplication.shared.open(mapURL)
+        let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location
+        if let url = URL(string: "http://maps.apple.com/?q=\(encodedLocation)") {
+            UIApplication.shared.open(url)
         }
     }
 
     private func openURL(url: String) {
-        if let validURL = URL(string: url) {
-            UIApplication.shared.open(validURL)
-        }
+        guard let url = URL(string: url) else { return }
+        UIApplication.shared.open(url)
     }
 }
 
+// MARK: - Supporting Views
 struct PrioritizationView: View {
     let messages: [Message]
     @Binding var path: NavigationPath
-    @Environment(\.dismiss) var dismiss
-    @State private var showPreview = false
-    @State private var selectedMessage: Message?
-
+    
     var body: some View {
-        NavigationView {
-            List(messages) { msg in
-                HStack {
-                    Circle()
-                        .frame(width: 10, height: 10)
-                        .foregroundColor(msg.viewed ? Color(hex: "#b37fc6").opacity(0.3) : Color(hex: "#b37fc6"))
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("\(msg.contact): \(msg.content)")
-                            .font(.custom("AzoSansRegular", size: 16))
-                        Text("Priority: \(msg.priority), Time: \(msg.timestamp)")
-                            .font(.custom("AzoSansRegular", size: 12))
-                            .foregroundColor(Color(hex: "#803a99"))
-                    }
-                }
-                .padding(.vertical, 5)
-                .onTapGesture {
-                    selectedMessage = msg
-                    showPreview = true
-                }
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
+                Text("Message Prioritization")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding()
+                
+                Spacer()
+                
+                Text("Coming Soon")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                
+                Spacer()
             }
-            .navigationTitle("Prioritized Messages")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") { dismiss() }
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .foregroundColor(Color(hex: "#803a99"))
-                }
-            }
-            .alert(isPresented: $showPreview) {
-                Alert(
-                    title: Text("Message Preview"),
-                    message: Text("""
-                        From: \(selectedMessage?.contact ?? "")
-                        Message: \(selectedMessage?.content ?? "")
-                        Time: \(selectedMessage?.timestamp ?? "")
-                        Priority: \(selectedMessage?.priority ?? 0)
-                        \(selectedMessage?.viewed == true ? "ACTIONED" : "")
-                        """),
-                    primaryButton: .default(Text("Action in App")) {
-                        if let msg = selectedMessage, !msg.viewed {
-                            let updatedMessages = messages.map { m in
-                                Message(id: m.id, contact: m.contact, content: m.content, timestamp: m.timestamp, viewed: m.id == msg.id ? true : m.viewed, priority: m.priority)
-                            }
-                            if let messagesData = try? JSONSerialization.data(withJSONObject: updatedMessages.map { [
-                                "id": $0.id,
-                                "contact": $0.contact,
-                                "content": $0.content,
-                                "timestamp": $0.timestamp,
-                                "viewed": $0.viewed,
-                                "priority": $0.priority
-                            ]}) {
-                                _ = WalletService.shared.keychain.save(key: "prioritized_messages", value: String(data: messagesData, encoding: .utf8)!)
-                            }
-                            if let url = URL(string: "mailto:\(msg.contact)") {
-                                UIApplication.shared.open(url)
-                            }
-                        }
-                    },
-                    secondaryButton: .cancel(Text("Dismiss"))
-                )
-            }
-            .background(Color(hex: "#4f225b"))
         }
+        .navigationBarHidden(true)
     }
 }
 
 struct StatsView: View {
     @Binding var path: NavigationPath
-    @State private var chain: String?
-    @State private var blockHeight: Int?
-    @State private var lastBlockHash: String?
-    @State private var networkHashrate: Double?
-
+    
     var body: some View {
-        NavigationView {
-            VStack(alignment: .leading, spacing: 20) {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
                 Text("Blockchain Stats")
-                    .font(.custom("AbadiMTProBold", size: 28))
-                    .foregroundColor(Color(hex: "#803a99"))
-                    .padding(.top, 40)
-                if let chain = chain, let blockHeight = blockHeight,
-                   let lastBlockHash = lastBlockHash, let networkHashrate = networkHashrate {
-                    Text("Chain: \(chain)")
-                        .font(.custom("AzoSansRegular", size: 16))
-                    Text("Block Height: \(blockHeight)")
-                        .font(.custom("AzoSansRegular", size: 16))
-                    Text("Last Block Hash: \(lastBlockHash)")
-                        .font(.custom("AzoSansRegular", size: 16))
-                    Text("Network Hashrate: \(String(format: "%.2f", networkHashrate)) GH/s")
-                        .font(.custom("AzoSansRegular", size: 16))
-                } else {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color(hex: "#803a99")))
-                }
-            }
-            .padding(.horizontal)
-            .navigationTitle("Blockchain Stats")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Back") { path.removeLast() }
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .foregroundColor(Color(hex: "#803a99"))
-                }
-            }
-            .background(Color(hex: "#4f225b"))
-            .onAppear {
-                fetchBlockchainInfo()
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding()
+                
+                Spacer()
+                
+                Text("Coming Soon")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                
+                Spacer()
             }
         }
-    }
-
-    private func fetchBlockchainInfo() {
-        guard let statsURL = URL(string: "https://telestai.cryptoscope.io/api/stats/") else {
-            print("Invalid stats API URL")
-            DispatchQueue.main.async {
-                self.chain = "Main"
-                self.blockHeight = 123456
-                self.lastBlockHash = "abc123..."
-                self.networkHashrate = 100.50
-            }
-            return
-        }
-        URLSession.shared.dataTask(with: statsURL) { data, response, error in
-            if let error = error {
-                print("Stats fetch error: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.chain = "Main"
-                    self.blockHeight = 123456
-                    self.lastBlockHash = "abc123..."
-                    self.networkHashrate = 100.50
-                }
-                return
-            }
-            guard let data = data,
-                  let stats = try? JSONDecoder().decode(BlockchainStats.self, from: data) else {
-                print("Stats decode error: \(String(data: data ?? Data(), encoding: .utf8) ?? "No data")")
-                DispatchQueue.main.async {
-                    self.chain = "Main"
-                    self.blockHeight = 123456
-                    self.lastBlockHash = "abc123..."
-                    self.networkHashrate = 100.50
-                }
-                return
-            }
-            DispatchQueue.main.async {
-                self.chain = stats.chain
-                self.blockHeight = stats.blockHeight
-                self.lastBlockHash = stats.lastBlockHash
-                self.networkHashrate = stats.networkHashrate / 1e9
-            }
-        }.resume()
+        .navigationBarHidden(true)
     }
 }
 
 struct UserPortalView: View {
     @Binding var path: NavigationPath
-    @State private var email = ""
-    @State private var dob = ""
-    @State private var address: String?
-    @State private var mnemonic: String?
-    @State private var showMnemonic = false
-    @State private var showMnemonicAlert = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    @State private var isStreaming = false
-    private let walletService = WalletService.shared
-    private let assistantService = AssistantService.shared
-
+    
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .frame(width: 100, height: 100)
-                    .foregroundColor(Color(hex: "#803a99"))
-                    .padding(.top, 40)
-                TextField("Email", text: $email)
-                    .disabled(true)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .font(.custom("AzoSansRegular", size: 16))
-                    .frame(height: 40)
-                    .disableInputAccessoryView()
-                    .padding(.horizontal)
-                TextField("Date of Birth (YYYY-MM-DD)", text: $dob)
-                    .disabled(true)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .font(.custom("AzoSansRegular", size: 16))
-                    .frame(height: 40)
-                    .disableInputAccessoryView()
-                    .padding(.horizontal)
-                if let address = address {
-                    HStack {
-                        Text("Address: \(shortenAddress(address))")
-                            .font(.custom("AzoSansRegular", size: 14))
-                        Button(action: {
-                            UIPasteboard.general.string = address
-                            alertMessage = "Address copied"
-                            showAlert = true
-                        }) {
-                            Image(systemName: "doc.on.doc")
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .background(Color(hex: "#4f225b").opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal)
-                }
-                if showMnemonic, let mnemonic = mnemonic {
-                    HStack {
-                        Text(mnemonic)
-                            .font(.custom("AzoSansRegular", size: 14))
-                        Button(action: {
-                            UIPasteboard.general.string = mnemonic
-                            alertMessage = "Mnemonic copied"
-                            showAlert = true
-                        }) {
-                            Image(systemName: "doc.on.doc")
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .background(Color(hex: "#4f225b").opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding(.horizontal)
-                }
-                Button("Reveal Mnemonic") {
-                    showMnemonicAlert = true
-                    if let mnemonic = walletService.keychain.read(key: "wallet_mnemonic") {
-                        self.mnemonic = mnemonic
-                        showMnemonic = true
-                    }
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color(hex: "#b37fc6"))
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 25))
-                .font(.custom("AbadiMTProBold", size: 16))
-                .padding(.horizontal)
-                Button("Save Profile") {
-                    saveUserProfile()
-                }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color(hex: "#b37fc6"))
-                .foregroundColor(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 25))
-                .font(.custom("AbadiMTProBold", size: 16))
-                .padding(.horizontal)
-                VStack(spacing: 10) {
-                    Toggle("Stream Data", isOn: $isStreaming)
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .padding(.horizontal)
-                        .frame(maxWidth: .infinity)
-                        .onChange(of: isStreaming) { _, newValue in
-                            assistantService.toggleStreaming(newValue) { success in
-                                alertMessage = "Data streaming \(success ? newValue ? "enabled" : "disabled" : "failed")"
-                                showAlert = true
-                                assistantService.speak(alertMessage)
-                            }
-                        }
-                    Text("Stream Data: \(isStreaming ? "Enabled" : "Disabled")")
-                        .font(.custom("AzoSansRegular", size: 14))
-                        .padding(.horizontal)
-                        .frame(maxWidth: .infinity)
-                }
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
+                Text("User Portal")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding()
+                
+                Spacer()
+                
+                Text("Coming Soon")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                
                 Spacer()
             }
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Text("User Profile")
-                        .font(.custom("AbadiMTProBold", size: 20))
-                        .foregroundColor(Color(hex: "#803a99"))
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Log Out") {
-                        walletService.clear()
-                        path = NavigationPath()
-                    }
-                        .font(.custom("AzoSansRegular", size: 16))
-                        .foregroundColor(Color(hex: "#803a99"))
-                }
-            }
-            .background(Color(hex: "#4f225b"))
-            .alert(isPresented: $showMnemonicAlert) {
-                Alert(
-                    title: Text("Confirm"),
-                    message: Text("Are you sure you want to reveal your mnemonic?"),
-                    primaryButton: .default(Text("Yes")) {
-                        if let mnemonic = walletService.keychain.read(key: "wallet_mnemonic") {
-                            self.mnemonic = mnemonic
-                            showMnemonic = true
-                        }
-                    },
-                    secondaryButton: .cancel()
-                )
-            }
-            .alert(isPresented: $showAlert) {
-                Alert(title: Text("Success"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
-            }
-            .onAppear {
-                loadUserProfile()
-                address = walletService.loadAddress()
-                mnemonic = walletService.keychain.read(key: "wallet_mnemonic")
-            }
         }
-    }
-
-    private func shortenAddress(_ address: String) -> String {
-        "\(address.prefix(6))...\(address.suffix(6))"
-    }
-
-    private func loadUserProfile() {
-        if let mnemonic = walletService.keychain.read(key: "wallet_mnemonic"),
-           let profileData = walletService.keychain.read(key: "user_profile_\(mnemonic)"),
-           let profile = try? JSONSerialization.jsonObject(with: Data(profileData.utf8)) as? [String: String] {
-            email = profile["email"] ?? ""
-            dob = profile["dob"] ?? ""
-        }
-    }
-
-    private func saveUserProfile() {
-        if let mnemonic = walletService.keychain.read(key: "wallet_mnemonic") {
-            let profile = ["email": email, "dob": dob]
-            if let profileData = try? JSONSerialization.data(withJSONObject: profile) {
-                _ = walletService.keychain.save(key: "user_profile_\(mnemonic)", value: String(data: profileData, encoding: .utf8)!)
-                alertMessage = "Profile saved"
-                showAlert = true
-            }
-        }
+        .navigationBarHidden(true)
     }
 }
 
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+// MARK: - Extensions
+struct DisableInputAccessoryView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        return UIView()
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+extension View {
+    func disableInputAccessoryView() -> some View {
+        self.background(DisableInputAccessoryView())
     }
 }
