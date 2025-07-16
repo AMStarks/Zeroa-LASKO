@@ -421,6 +421,7 @@ struct HomeView: View {
                             .background(DesignSystem.Colors.secondary)
                             .clipShape(Circle())
                     }
+                    .frame(width: 44, height: 44)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 
@@ -599,6 +600,14 @@ struct HomeView: View {
                    let action = json["action"] as? String {
                     print("Parsed action: \(action), json: \(json)")
                     handleAction(action: action, parameters: json)
+                } else {
+                    // Try to parse as direct JSON object
+                    if let data = response.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        print("Direct JSON parsing: \(json)")
+                        // Handle as direct JSON response
+                        assistantService.speak("I processed your request successfully.")
+                    }
                 }
             case .failure(let error):
                 print("AI request failed: \(error)")
