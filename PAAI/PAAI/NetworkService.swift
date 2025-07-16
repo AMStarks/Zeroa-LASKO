@@ -71,14 +71,15 @@ class NetworkService {
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let choices = json["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: String],
-                  let content = message["content"] else {
+                  let message = choices.first?["message"] as? [String: Any],
+                  let content = message["content"] as? String else {
                 print("❌ Failed to parse response JSON")
                 completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])))
                 return
             }
             
             print("✅ Successfully parsed response")
+            print("📄 Content: \(content)")
             completion(.success(content))
         }.resume()
     }
