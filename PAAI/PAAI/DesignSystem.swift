@@ -292,7 +292,6 @@ struct InputField: View {
     let placeholder: String
     @Binding var text: String
     let isSecure: Bool
-    @FocusState private var isFocused: Bool
     
     init(_ placeholder: String, text: Binding<String>, isSecure: Bool = false) {
         self.placeholder = placeholder
@@ -304,10 +303,8 @@ struct InputField: View {
         Group {
             if isSecure {
                 SecureField(placeholder, text: $text)
-                    .focused($isFocused)
             } else {
                 TextField(placeholder, text: $text)
-                    .focused($isFocused)
             }
         }
         .font(DesignSystem.Typography.bodyLarge)
@@ -318,7 +315,7 @@ struct InputField: View {
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                .stroke(isFocused ? DesignSystem.Colors.secondary : DesignSystem.Colors.light.opacity(0.3), lineWidth: isFocused ? 2 : 1)
+                .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 1)
         )
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
