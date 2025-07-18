@@ -56,14 +56,9 @@ struct HybridMessagingView: View {
                 .background(DesignSystem.Colors.surface)
                 
                 // Tab Selector
-                Picker("View", selection: $selectedTab) {
-                    Text("Conversations").tag(0)
-                    Text("Contacts").tag(1)
-                    Text("Settings").tag(2)
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .padding(.horizontal, DesignSystem.Spacing.lg)
-                .padding(.vertical, DesignSystem.Spacing.md)
+                CustomSegmentedPicker(selection: $selectedTab)
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.vertical, DesignSystem.Spacing.md)
                 
                 // Content
                 TabView(selection: $selectedTab) {
@@ -461,9 +456,7 @@ struct AddContactView: View {
                             .font(DesignSystem.Typography.bodyMedium)
                             .foregroundColor(DesignSystem.Colors.text)
                         
-                        TextField("Enter TLS wallet address", text: $address)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(DesignSystem.Typography.bodyMedium)
+                        InputField("Enter TLS wallet address", text: $address)
                     }
                     
                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
@@ -471,9 +464,7 @@ struct AddContactView: View {
                             .font(DesignSystem.Typography.bodyMedium)
                             .foregroundColor(DesignSystem.Colors.text)
                         
-                        TextField("Enter contact name", text: $name)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .font(DesignSystem.Typography.bodyMedium)
+                        InputField("Enter contact name", text: $name)
                     }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -604,5 +595,53 @@ struct SecurityFeatureRow: View {
             
             Spacer()
         }
+    }
+}
+
+// MARK: - Custom Segmented Picker
+struct CustomSegmentedPicker: View {
+    @Binding var selection: Int
+    private let options = ["Conversations", "Contacts", "Settings"]
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<options.count, id: \.self) { index in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selection = index
+                    }
+                }) {
+                    Text(options[index])
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .fontWeight(.medium)
+                        .foregroundColor(selection == index ? .white : DesignSystem.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                .fill(selection == index ? DesignSystem.Colors.secondary : DesignSystem.Colors.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                .stroke(DesignSystem.Colors.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                if index < options.count - 1 {
+                    Spacer()
+                        .frame(width: 8)
+                }
+            }
+        }
+        .padding(4)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                .fill(DesignSystem.Colors.surface)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                        .stroke(DesignSystem.Colors.secondary.opacity(0.3), lineWidth: 1)
+                )
+        )
     }
 } 
