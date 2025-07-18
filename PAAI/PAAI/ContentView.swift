@@ -155,6 +155,10 @@ struct ContentView: View {
                         currentConversation: $currentConversation,
                         showNewChat: $showNewChat
                     )
+                case "settings":
+                    SettingsView(path: $path)
+                case "support":
+                    SupportView(path: $path)
                 default:
                     EmptyView()
                 }
@@ -1178,6 +1182,11 @@ struct HamburgerMenuView: View {
                             path.append("settings")
                             showHamburgerMenu = false
                         }
+                        
+                        MenuButton(title: "Support & Help", icon: "questionmark.circle") {
+                            path.append("support")
+                            showHamburgerMenu = false
+                        }
                     }
                     .padding(.vertical, DesignSystem.Spacing.md)
                 }
@@ -1237,16 +1246,12 @@ struct ProfileView: View {
     @State private var biometricEnabled = true
     @State private var showSessionManagement = false
     @State private var showAnalytics = false
-    @State private var showBugReport = false
     @State private var selectedLanguage = "English"
     @State private var selectedCurrency = "USD"
     @State private var selectedTheme = "Native"
     @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
     @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
     @State private var availableThemes = ["Native", "Light", "Dark"]
-    @State private var bugDescription = ""
-    @State private var bugCategory = "General"
-    @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
     @State private var analyticsData: AnalyticsData?
     @State private var activeSessions: [SessionInfo] = []
     @State private var showEditPersonalInfo = false
@@ -1278,7 +1283,7 @@ struct ProfileView: View {
                     
                     Spacer()
                     
-                    Text(LocalizedString.localized("profile_settings"))
+                    Text("Profile")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
@@ -1461,149 +1466,6 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
                         
-                        // AI Status
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("AI Status")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    HStack {
-                                        Image(systemName: "brain.head.profile")
-                                            .foregroundColor(DesignSystem.Colors.secondary)
-                                            .font(.system(size: 20))
-                                        
-                                        Text("xAI Grok Integration")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        
-                                        Spacer()
-                                        
-                                        Text("Active")
-                                            .font(DesignSystem.Typography.bodySmall)
-                                            .foregroundColor(DesignSystem.Colors.success)
-                                            .padding(.horizontal, DesignSystem.Spacing.sm)
-                                            .padding(.vertical, 4)
-                                            .background(DesignSystem.Colors.success.opacity(0.2))
-                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
-                                    }
-                                    
-                                    Text("AI features are automatically configured")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        .multilineTextAlignment(.leading)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
-                        // Security & Session Management
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Security & Sessions")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    Toggle("Biometric Authentication", isOn: $biometricEnabled)
-                                        .font(DesignSystem.Typography.bodyMedium)
-                                        .foregroundColor(DesignSystem.Colors.text)
-                                    
-                                    Button(action: {
-                                        showSessionManagement = true
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "iphone")
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Text("Manage Sessions")
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
-                        // Preferences
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text(LocalizedString.localized("preferences"))
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    // Language Button
-                                    Button(action: {
-                                        showLanguagePicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("language"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedLanguage)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
-                                    
-                                    // Currency Button
-                                    Button(action: {
-                                        showCurrencyPicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("currency"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedCurrency)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
-                                    
-                                    // Theme Button
-                                    Button(action: {
-                                        showThemePicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("theme"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedTheme)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
                         // Analytics
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
@@ -1630,51 +1492,7 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
                         
-                        // Support & Help
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Support & Help")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    Button(action: {
-                                        showBugReport = true
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundColor(DesignSystem.Colors.error)
-                                            Text("Report a Bug")
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        }
-                                        .padding(.vertical, DesignSystem.Spacing.sm)
-                                    }
-                                    
-                                    Button(action: {
-                                        if let url = URL(string: "https://discord.gg/VmFXfHnZE5") {
-                                            UIApplication.shared.open(url)
-                                        }
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "message.circle.fill")
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Text("Speak with Team")
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        }
-                                        .padding(.vertical, DesignSystem.Spacing.sm)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
+
                         
                         // Action Buttons
                         VStack(spacing: DesignSystem.Spacing.md) {
@@ -1704,9 +1522,6 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showAnalytics) {
             AnalyticsView(analyticsData: $analyticsData)
-        }
-        .sheet(isPresented: $showBugReport) {
-            BugReportView(bugDescription: $bugDescription, bugCategory: $bugCategory, bugCategories: bugCategories)
         }
         .sheet(isPresented: $showEditPersonalInfo) {
             EditPersonalInfoView(displayName: $displayName, userBio: $userBio, userLocation: $userLocation)
@@ -1946,27 +1761,422 @@ struct AIFeaturesView: View {
     }
 }
 
-struct SettingsView: View {
-    @Environment(\.dismiss) private var dismiss
+struct SupportView: View {
+    @Binding var path: NavigationPath
+    @State private var showBugReport = false
+    @State private var bugDescription = ""
+    @State private var bugCategory = "General"
+    @State private var bugCategories = ["General", "Login", "Wallet", "AI Features", "UI/UX", "Other"]
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header with Back Button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Support & Help")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Spacer()
+                    
+                    // Placeholder for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
                 
-                VStack(spacing: DesignSystem.Spacing.lg) {
+                ScrollView {
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        // FAQ Section
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Frequently Asked Questions")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Text("How do I create a new account?")
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                    Text("Tap 'Create New Account' on the login screen. Write down your recovery phrase securely.")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(DesignSystem.Spacing.sm)
+                                .background(DesignSystem.Colors.surface.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Text("How do I change my theme?")
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                    Text("Go to Menu → Settings → Preferences → Theme to change your app appearance.")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(DesignSystem.Spacing.sm)
+                                .background(DesignSystem.Colors.surface.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Support Actions
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Get Help")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Button(action: {
+                                        showBugReport = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundColor(DesignSystem.Colors.error)
+                                            Text("Report a Bug")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                    
+                                    Button(action: {
+                                        if let url = URL(string: "https://discord.gg/VmFXfHnZE5") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "message.circle.fill")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Speak with Team")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                    
+                                    Button(action: {
+                                        // Email support
+                                        if let url = URL(string: "mailto:support@telestai.com") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "envelope")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Email Support")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                    
+                                    Button(action: {
+                                        // Open documentation
+                                        if let url = URL(string: "https://docs.telestai.com") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "doc.text")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Documentation")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
+            }
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showBugReport) {
+            BugReportView(bugDescription: $bugDescription, bugCategory: $bugCategory, bugCategories: bugCategories)
+        }
+    }
+}
+
+struct SettingsView: View {
+    @Binding var path: NavigationPath
+    @State private var biometricEnabled = true
+    @State private var showSessionManagement = false
+    @State private var selectedLanguage = "English"
+    @State private var selectedCurrency = "USD"
+    @State private var selectedTheme = "Native"
+    @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
+    @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
+    @State private var availableThemes = ["Native", "Light", "Dark"]
+    @State private var showLanguagePicker = false
+    @State private var showCurrencyPicker = false
+    @State private var showThemePicker = false
+    @StateObject private var localizationManager = LocalizationManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header with Back Button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
                     Text("Settings")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Text("Settings coming soon...")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Spacer()
+                    
+                    // Placeholder for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
                 }
-                .padding(DesignSystem.Spacing.xl)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                ScrollView {
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        // AI Status
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("AI Status")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    HStack {
+                                        Image(systemName: "brain.head.profile")
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                            .font(.system(size: 20))
+                                        
+                                        Text("xAI Grok Integration")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        
+                                        Spacer()
+                                        
+                                        Text("Active")
+                                            .font(DesignSystem.Typography.bodySmall)
+                                            .foregroundColor(DesignSystem.Colors.success)
+                                            .padding(.horizontal, DesignSystem.Spacing.sm)
+                                            .padding(.vertical, 4)
+                                            .background(DesignSystem.Colors.success.opacity(0.2))
+                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
+                                    }
+                                    
+                                    Text("AI features are automatically configured")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .multilineTextAlignment(.leading)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Security & Session Management
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Security & Sessions")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Toggle("Biometric Authentication", isOn: $biometricEnabled)
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    Button(action: {
+                                        showSessionManagement = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "iphone")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Manage Sessions")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Preferences
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text(LocalizedString.localized("preferences"))
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    // Language Button
+                                    Button(action: {
+                                        showLanguagePicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("language"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedLanguage)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                        }
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    
+                                    // Currency Button
+                                    Button(action: {
+                                        showCurrencyPicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("currency"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedCurrency)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                        }
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                    
+                                    // Theme Button
+                                    Button(action: {
+                                        showThemePicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("theme"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedTheme)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                        }
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
             }
-            .navigationBarHidden(true)
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $showLanguagePicker) {
+            PreferencePickerView(
+                title: "Language",
+                selection: $selectedLanguage,
+                options: availableLanguages,
+                onSelectionChanged: { language in
+                    localizationManager.currentLanguage = language
+                }
+            )
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            PreferencePickerView(
+                title: "Currency",
+                selection: $selectedCurrency,
+                options: availableCurrencies,
+                onSelectionChanged: { currency in
+                    UserDefaults.standard.set(currency, forKey: "user_currency")
+                }
+            )
+        }
+        .sheet(isPresented: $showThemePicker) {
+            PreferencePickerView(
+                title: "Theme",
+                selection: $selectedTheme,
+                options: availableThemes,
+                onSelectionChanged: { theme in
+                    themeManager.currentTheme = theme
+                }
+            )
+        }
+        .sheet(isPresented: $showSessionManagement) {
+            SessionManagementView(sessions: .constant([]))
+        }
+        .onAppear {
+            // Load saved preferences
+            selectedLanguage = UserDefaults.standard.string(forKey: "user_language") ?? "English"
+            selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
+            selectedTheme = UserDefaults.standard.string(forKey: "user_theme") ?? "Native"
         }
     }
 }
