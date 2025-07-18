@@ -265,7 +265,7 @@ struct CreateAccountView: View {
     @Binding var path: NavigationPath
     @State private var mnemonic = ""
     @State private var hasWrittenDown = false
-    @State private var showMnemonic = true  // Show mnemonic by default
+    @State private var showMnemonic = false  // Hide mnemonic by default
     @State private var showConfirm = false
     @State private var isCreating = false
     @StateObject private var themeManager = ThemeManager.shared
@@ -551,7 +551,7 @@ struct HomeView: View {
             DesignSystem.Colors.background
                 .ignoresSafeArea()
             
-            VStack(spacing: DesignSystem.Spacing.lg) {
+            VStack(spacing: 0) {
                 // TLS Balance Section - Moved closer to Dynamic Island
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     CardView {
@@ -702,16 +702,16 @@ struct HomeView: View {
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
                 
+                Spacer()
+                
                 // Bottom Navigation
-                VStack(spacing: DesignSystem.Spacing.xl) {
-                    BottomNavigationView(
-                        selectedTab: $selectedTab,
-                        showMessaging: $showMessaging,
-                        showHamburgerMenu: $showHamburgerMenu,
-                        path: $path,
-                        themeManager: themeManager
-                    )
-                }
+                BottomNavigationView(
+                    selectedTab: $selectedTab,
+                    showMessaging: $showMessaging,
+                    showHamburgerMenu: $showHamburgerMenu,
+                    path: $path,
+                    themeManager: themeManager
+                )
             }
         }
         .alert("Success", isPresented: $showAlert) {
