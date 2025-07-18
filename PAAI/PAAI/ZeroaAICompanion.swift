@@ -441,6 +441,11 @@ class ZeroaAICompanion: ObservableObject {
             return "I'm not properly configured yet. Please set up my personality first."
         }
         
+        // Check if this is a task request that should be executed
+        if isTaskRequest(input) {
+            return handleTaskRequest(input: input, context: context, personality: personality)
+        }
+        
         let contextualInput = buildContextualInput(input: input, context: context)
         let personalityPrompt = buildPersonalityPrompt(personality: personality)
         let memoryContext = buildMemoryContext()
@@ -461,6 +466,128 @@ class ZeroaAICompanion: ObservableObject {
         
         // In a real implementation, this would call the AI model
         return generateAIResponse(prompt: fullPrompt, personality: personality)
+    }
+    
+    /// Determines if the input is a task request that should be executed
+    private func isTaskRequest(_ input: String) -> Bool {
+        let taskKeywords = [
+            "schedule", "meeting", "calendar", "add meeting",
+            "navigate", "maps", "location", "directions",
+            "open", "website", "url", "browse",
+            "message", "text", "send message", "contact",
+            "call", "phone", "dial",
+            "email", "mail", "send email",
+            "camera", "photo", "take photo",
+            "photos", "gallery",
+            "settings", "preferences",
+            "note", "create note",
+            "balance", "check balance", "tls",
+            "payment", "send payment", "transfer",
+            "sign", "signature", "wallet",
+            "stats", "statistics", "blockchain"
+        ]
+        
+        let lowercasedInput = input.lowercased()
+        return taskKeywords.contains { lowercasedInput.contains($0) }
+    }
+    
+    /// Handles task requests by delegating to the main app's task execution system
+    private func handleTaskRequest(input: String, context: [String: Any], personality: CompanionPersonality) -> String {
+        // Create enhanced prompt for task execution
+        let enhancedPrompt = """
+        You are an AI assistant for a blockchain app. The user has a balance of \(context["tlsBalance"] as? Double ?? 0.0) TLS.
+        
+        User request: \(input)
+        
+        Respond with a JSON object containing:
+        - "action": The action to perform (e.g., "add meeting", "open maps", "check balance", "send payment")
+        - "parameters": A dictionary of parameters needed for the action
+        - "response": A natural language response to the user that matches the companion's personality
+        
+        Available actions:
+        - "add meeting": Schedule a calendar event (requires "title", "start", "end")
+        - "open maps": Navigate to a location (requires "location")
+        - "open safari": Open a website (requires "url")
+        - "open messages": Send a text message (requires "contact", "message")
+        - "open phone": Make a phone call (requires "contact")
+        - "open mail": Send an email (requires "to", "subject")
+        - "open camera": Take a photo
+        - "open photos": Open photo gallery
+        - "open settings": Open device settings
+        - "open notes": Create a note (requires "title", "content")
+        - "prioritize messages": Analyze and prioritize messages
+        - "tell main stats": Show blockchain statistics
+        - "sign message": Sign a message with wallet (requires "message")
+        - "check balance": Check current TLS balance
+        - "send payment": Send TLS payment (requires "to", "amount")
+        
+        Companion personality: \(personality.name) - \(personality.communicationStyle.rawValue) style, \(personality.emotionalTone.rawValue) tone
+        
+        Use UTC timezone and assume today is 2025-07-15. Return ONLY the JSON object, no additional text or explanation.
+        """
+        
+        // Use the same Grok API as the main app
+        NetworkService.shared.getGrokResponse(input: enhancedPrompt) { result in
+            switch result {
+            case .success(let response):
+                let cleanResponse = self.extractJSONFromResponse(response)
+                do {
+                    if let data = cleanResponse.data(using: .utf8),
+                       let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let action = json["action"] as? String {
+                        let parameters = json["parameters"] as? [String: Any] ?? [:]
+                        
+                        // Execute the task using the main app's task execution system
+                        self.executeTask(action: action, parameters: parameters)
+                        
+                        // Return the response text
+                        if let responseText = json["response"] as? String {
+                            DispatchQueue.main.async {
+                                // Update the conversation with the task result
+                                self.addConversationMemory(
+                                    userInput: input,
+                                    companionResponse: responseText,
+                                    context: context,
+                                    emotionalContext: .neutral
+                                )
+                            }
+                        }
+                    }
+                } catch {
+                    print("❌ Failed to parse task response: \(error)")
+                }
+            case .failure(let error):
+                print("❌ Task execution failed: \(error)")
+            }
+        }
+        
+        // Return a temporary response while the task is being processed
+        return "I'm working on that for you! Let me execute that task..."
+    }
+    
+    /// Extracts JSON from AI response
+    private func extractJSONFromResponse(_ response: String) -> String {
+        if let startIndex = response.firstIndex(of: "{"),
+           let endIndex = response.lastIndex(of: "}") {
+            let jsonStart = response.index(startIndex, offsetBy: 0)
+            let jsonEnd = response.index(endIndex, offsetBy: 1)
+            return String(response[jsonStart..<jsonEnd])
+        }
+        return response
+    }
+    
+    /// Executes tasks using the main app's task execution system
+    private func executeTask(action: String, parameters: [String: Any]) {
+        // This would integrate with the main app's task execution system
+        // For now, we'll post a notification that the main app can listen to
+        NotificationCenter.default.post(
+            name: NSNotification.Name("ExecuteCompanionTask"),
+            object: nil,
+            userInfo: [
+                "action": action,
+                "parameters": parameters
+            ]
+        )
     }
     
     /// Builds contextual input with user preferences and current state

@@ -256,6 +256,8 @@ struct ContentView: View {
             isCheckingLogin = false
         }
     }
+    
+    // Companion task listener moved to HomeView where handleAction is defined
 }
 
 // MARK: - Create Account View
@@ -465,7 +467,7 @@ struct HomeView: View {
     @Binding var path: NavigationPath
     @ObservedObject var assistantService: AssistantService
     @ObservedObject var tlsService: TLSBlockchainService
-    @State private var commandInput = ""
+    // Command input removed - functionality preserved for future use
     @State private var isSubscribed = false
     @State private var isInitializing = false
     @State private var showSubscriptionAlert = false
@@ -533,11 +535,7 @@ struct HomeView: View {
     @State private var newContactAddress = ""
     
     @StateObject private var themeManager = ThemeManager.shared
-    @FocusState private var isCommandFieldFocused: Bool {
-        didSet {
-            print("🔍 Focus state changed: \(isCommandFieldFocused)")
-        }
-    }
+    // Focus state removed - functionality preserved for future use
     private let walletService = WalletService.shared
     private let networkService = NetworkService.shared
 
@@ -697,75 +695,8 @@ struct HomeView: View {
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
                 
-                // AI Command Line
+                // Bottom Navigation
                 VStack(spacing: DesignSystem.Spacing.xl) {
-                    VStack(spacing: DesignSystem.Spacing.md) {
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            TextField("How may I help you?", text: $commandInput)
-                                .font(DesignSystem.Typography.bodyLarge)
-                                .foregroundColor(DesignSystem.Colors.text)
-                                .padding(DesignSystem.Spacing.md)
-                                .frame(maxWidth: .infinity)
-                                .frame(minHeight: 44)
-                                .background(DesignSystem.Colors.surface)
-                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                                        .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 1)
-                                )
-                                .focused($isCommandFieldFocused)
-                                .textInputAutocapitalization(.never)
-                                .disableAutocorrection(true)
-                                .keyboardType(.default)
-                                .submitLabel(.done)
-                                .onSubmit {
-                                    handleCommand()
-                                }
-                                .onAppear {
-                                    print("🔍 TextField appeared, setting focus...")
-                                    // Auto-focus the command field when the view appears
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                        print("🔍 Setting focus to command field")
-                                        isCommandFieldFocused = true
-                                    }
-                                }
-                                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                                    print("🔍 Keyboard did show")
-                                }
-                                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
-                                    print("🔍 Keyboard did hide")
-                                }
-                                .onChange(of: commandInput) { newValue in
-                                    print("🔍 TextField value changed: '\(newValue)'")
-                                }
-                                .onTapGesture {
-                                    print("🔍 TextField tapped")
-                                    isCommandFieldFocused = true
-                                }
-                            
-                            Button(action: {
-                                handleCommand()
-                            }) {
-                                Image(systemName: "paperplane.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 18))
-                                    .frame(width: 40, height: 40)
-                                    .background(DesignSystem.Colors.secondary)
-                                    .clipShape(Circle())
-                            }
-                            .disabled(commandInput.isEmpty)
-                        }
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.lg + DesignSystem.Spacing.md)
-                    
-                    // ZeroaFinger Image
-                    Image("ZeroaFinger")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(height: 120)
-                        .padding(.vertical, DesignSystem.Spacing.xl)
-                    
-                    // Bottom Navigation
                     BottomNavigationView(
                         selectedTab: $selectedTab,
                         showMessaging: $showMessaging,
@@ -803,14 +734,13 @@ struct HomeView: View {
         }
         .onAppear {
             initialize()
+            setupCompanionTaskListener()
         }
     }
     
-    private func handleCommand() {
-        guard !commandInput.isEmpty else { return }
-        
-        let userInput = commandInput
-        commandInput = ""
+    private func handleCommand(userInput: String = "") {
+        // Command handling preserved for future use with AI companion
+        // This function can be called from the AI companion interface
         
         // Create enhanced prompt with context
         let enhancedPrompt = """
@@ -1398,6 +1328,21 @@ struct HomeView: View {
         print("📊 Fetching blockchain information")
         alertMessage = "Blockchain statistics feature coming soon"
         showAlert = true
+    }
+    
+    /// Sets up listener for companion task execution requests
+    private func setupCompanionTaskListener() {
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("ExecuteCompanionTask"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let userInfo = notification.userInfo,
+               let action = userInfo["action"] as? String,
+               let parameters = userInfo["parameters"] as? [String: Any] {
+                self.handleAction(action: action, parameters: parameters)
+            }
+        }
     }
 }
 

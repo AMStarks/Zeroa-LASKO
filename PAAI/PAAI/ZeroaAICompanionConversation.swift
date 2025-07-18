@@ -243,6 +243,9 @@ struct CompanionConversationView: View {
             context["user_preferences"] = preferences.preferredTopics
         }
         
+        // Add TLS balance from the main app (using cached value)
+        context["tlsBalance"] = TLSBlockchainService.shared.currentBalance
+        
         return context
     }
     
