@@ -1,103 +1,62 @@
-# PAAI - Zeroa Apple App
+# PAAI - Personal AI Assistant
 
-A SwiftUI iOS application that integrates with xAI's Grok API for AI-powered interactions.
+A SwiftUI iOS app that integrates AI and blockchain features for personal assistance.
 
 ## Features
 
-- SwiftUI-based iOS app
-- Integration with xAI Grok API
-- Secure API key management
-- Multiple services: Assistant, Crypto, Keychain, Network, and Wallet
-
-## Setup Instructions
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/AMStarks/Zeroa-Apple-App.git
-cd Zeroa-Apple-App
-```
-
-### 2. Configure API Key
-
-You have two options to set up your xAI API key:
-
-#### Option A: Environment Variable (Recommended)
-Set the `XAI_API_KEY` environment variable in Xcode:
-
-1. Open the project in Xcode
-2. Select your target
-3. Go to "Edit Scheme" → "Run" → "Arguments"
-4. Add environment variable: `XAI_API_KEY` = `your_api_key_here`
-
-#### Option B: Local Config File
-1. Edit `PAAI/PAAI/Config.plist`
-2. Replace `YOUR_API_KEY_HERE` with your actual xAI API key
-3. The file is already in `.gitignore` so it won't be committed
-
-### 3. Build and Run
-1. Open `PAAI.xcodeproj` in Xcode
-2. Select your target device/simulator
-3. Build and run the project (⌘+R)
-
-## Project Structure
-
-```
-PAAI/
-├── PAAI/
-│   ├── PAAIApp.swift          # App entry point
-│   ├── ContentView.swift      # Main UI
-│   ├── NetworkService.swift   # API communication
-│   ├── AssistantService.swift # Assistant functionality
-│   ├── CryptoService.swift    # Cryptographic operations
-│   ├── KeychainService.swift  # Secure storage
-│   ├── WalletService.swift    # Wallet operations
-│   ├── Color+Hex.swift        # Color utilities
-│   └── Assets.xcassets/       # App assets
-├── PAAITests/                 # Unit tests
-└── PAAIUITests/              # UI tests
-```
-
-## Security Notes
-
-- API keys are never committed to the repository
-- The `Config.plist` file is excluded from git tracking
-- Environment variables are used for secure configuration
-- All sensitive data is handled through secure services
+- AI-powered command line interface
+- TLS blockchain integration
+- Secure wallet management
+- Hybrid messaging system (Switchboard)
+- Theme management (Light/Dark/Native)
+- Multi-language support
+- Real-time price tracking
 
 ## Development
 
-### Adding New Features
-1. Create new Swift files in the `PAAI/` directory
-2. Follow the existing service pattern for new functionality
-3. Update tests as needed
+### Prerequisites
 
-### API Integration
-The `NetworkService` class handles all API communication. To add new endpoints:
+- Xcode 15+
+- iOS 18.5+ Simulator
+- macOS 14+
 
-1. Add new methods to `NetworkService`
-2. Use the same secure API key loading pattern
-3. Handle errors appropriately
+### Setup
 
-## Troubleshooting
+1. Clone the repository
+2. Open `PAAI.xcodeproj` in Xcode
+3. Select iPhone 16 Pro Simulator
+4. Build and run
 
-### API Key Issues
-- Ensure your API key is valid and has proper permissions
-- Check that the environment variable is set correctly
-- Verify the Config.plist file exists and has the correct key
+### Troubleshooting
 
-### Build Issues
-- Clean build folder (⌘+Shift+K)
-- Reset package caches if using Swift Package Manager
-- Check that all required files are included in the target
+#### Mac Keyboard Not Working in iOS Simulator
 
-## Contributing
+If you cannot type using your Mac keyboard in the iOS Simulator:
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+1. Open the iOS Simulator
+2. Go to **Hardware > Keyboard > Connect Hardware Keyboard**
+3. Make sure this option is **checked** (✔️)
+4. If it's already checked, try unchecking and rechecking it
+5. Restart the Simulator if needed
 
-## License
+This setting must be enabled for the Mac keyboard to work with text fields in the Simulator.
 
-[Add your license information here]
+## Version History
+
+- v1.16: Fix Mac keyboard input for AI command line
+- v1.15: Add comprehensive debugging for keyboard input issue
+- v1.14: Replace InputField with direct TextField for AI command line
+- v1.13: Fix Mac keyboard input for AI command line
+- v1.12: Fix Switchboard UI theme alignment
+- v1.11: Fix keyboard input for AI command line
+- v1.10: Fix AI command line functionality
+- v1.9: Rename P2P Messaging to Switchboard
+- v1.8: Add back button and UI theming for messaging
+- v1.7: Implement hybrid messaging system
+- v1.6: Move Support & Help to menu
+- v1.5: Fix bottom navigation alignment
+- v1.4: Restore create account flow
+- v1.3: Update login screen UI
+- v1.2: Add menu text and fix command alignment
+- v1.1: Add TLS price integration
+- v1.0: Baseline version
