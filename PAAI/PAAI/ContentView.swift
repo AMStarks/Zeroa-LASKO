@@ -265,7 +265,7 @@ struct CreateAccountView: View {
     @Binding var path: NavigationPath
     @State private var mnemonic = ""
     @State private var hasWrittenDown = false
-    @State private var showMnemonic = false
+    @State private var showMnemonic = true  // Show mnemonic by default
     @State private var showConfirm = false
     @State private var isCreating = false
     @StateObject private var themeManager = ThemeManager.shared
@@ -320,7 +320,7 @@ struct CreateAccountView: View {
                             }
                         }
                         
-                        Text("Tap to show/hide • Copy to clipboard")
+                        Text("Write down these words in order • Copy to clipboard")
                             .font(DesignSystem.Typography.caption)
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
@@ -328,7 +328,7 @@ struct CreateAccountView: View {
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 
                 // Confirmation Toggle
-                Toggle("I have written this down securely", isOn: $hasWrittenDown)
+                Toggle("I have written down my recovery phrase securely", isOn: $hasWrittenDown)
                     .font(DesignSystem.Typography.bodyMedium)
                     .foregroundColor(DesignSystem.Colors.text)
                     .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -365,10 +365,17 @@ struct CreateAccountView: View {
     
     private func createAccount() {
         isCreating = true
-        walletService.importMnemonic(mnemonic) { success, _ in
-            isCreating = false
-            if success {
-                path = NavigationPath()
+        walletService.importMnemonic(mnemonic) { success, derivedAddress in
+            DispatchQueue.main.async {
+                isCreating = false
+                if success {
+                    print("✅ Account created successfully with address: \(derivedAddress ?? "unknown")")
+                    // Navigate to home screen
+                    path.append("home")
+                } else {
+                    print("❌ Failed to create account")
+                    // Could add error handling here if needed
+                }
             }
         }
     }
