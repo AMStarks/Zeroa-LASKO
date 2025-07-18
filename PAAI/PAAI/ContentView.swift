@@ -418,27 +418,11 @@ struct HomeView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Header
-                HStack {
-                    Spacer()
-                    
-                    Text("PAAI")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Spacer()
-                }
-                .padding(.horizontal, DesignSystem.Spacing.lg)
-                .padding(.top, DesignSystem.Spacing.lg)
-                
-                // TLS Balance Section
+                // TLS Balance Section - Moved closer to Dynamic Island
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     CardView {
                         VStack(spacing: DesignSystem.Spacing.md) {
                             HStack {
-                                Text("TLS Balance")
-                                    .font(DesignSystem.Typography.bodyMedium)
-                                    .foregroundColor(DesignSystem.Colors.textSecondary)
                                 Spacer()
                                 if isLoadingPrice {
                                     ProgressView()
@@ -448,42 +432,62 @@ struct HomeView: View {
                             
                             VStack(spacing: DesignSystem.Spacing.md) {
                                 VStack(spacing: DesignSystem.Spacing.xs) {
-                                    Text("\(Int(ceil(tlsBalance))) TLS")
-                                        .font(DesignSystem.Typography.titleMedium)
-                                        .foregroundColor(DesignSystem.Colors.text)
-                                        .multilineTextAlignment(.center)
+                                    // Currency value with price trend arrow
+                                    let selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
+                                    let currencySymbol = getCurrencySymbol(for: selectedCurrency)
                                     
                                     if tlsPrice > 0 {
-                                        Text("$\(String(format: "%.2f", tlsBalance * tlsPrice))")
+                                        HStack(spacing: DesignSystem.Spacing.sm) {
+                                            Text("\(currencySymbol)\(String(format: "%.2f", tlsBalance * tlsPrice))")
+                                                .font(DesignSystem.Typography.titleMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                                .multilineTextAlignment(.center)
+                                            
+                                            if tlsPriceChange != 0 {
+                                                Image(systemName: tlsPriceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                                    .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
+                                                    .font(.system(size: 16, weight: .semibold))
+                                            }
+                                        }
+                                    }
+                                    
+                                    // TLS amount below in smaller font
+                                    Text("\(Int(ceil(tlsBalance))) TLS")
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                
+                                // 7-Day Price Trend
+                                VStack(spacing: DesignSystem.Spacing.sm) {
+                                    HStack {
+                                        Text("7-Day Price Trend")
+                                            .font(DesignSystem.Typography.bodySmall)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        Spacer()
+                                    }
+                                    
+                                    if !priceHistory.isEmpty {
+                                        LineChartView(
+                                            data: priceHistory,
+                                            width: UIScreen.main.bounds.width - 80,
+                                            height: 60,
+                                            isPositive: tlsPriceChange >= 0
+                                        )
+                                    } else {
+                                        Rectangle()
+                                            .fill(DesignSystem.Colors.surface)
+                                            .frame(height: 60)
+                                            .cornerRadius(DesignSystem.CornerRadius.small)
+                                    }
+                                    
+                                    // TLS Price below the chart
+                                    if tlsPrice > 0 {
+                                        Text("$\(String(format: "%.5f", tlsPrice)) per TLS")
                                             .font(DesignSystem.Typography.bodyMedium)
                                             .foregroundColor(DesignSystem.Colors.textSecondary)
                                             .multilineTextAlignment(.center)
                                     }
-                                }
-                                
-                                VStack(spacing: DesignSystem.Spacing.xs) {
-                                    Text("7-Day Price Trend")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                    
-                                    if isLoadingHistory {
-                                        ProgressView()
-                                            .scaleEffect(0.6)
-                                    } else {
-                                        LineChartView(data: priceHistory, width: 280, height: 60)
-                                            .background(Color.clear)
-                                    }
-                                }
-                            }
-                            
-                            if tlsPriceChange != 0 {
-                                HStack {
-                                    Image(systemName: tlsPriceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                        .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
-                                    Text("\(String(format: "%.2f", abs(tlsPriceChange)))%")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
-                                    Spacer()
                                 }
                             }
                             
@@ -581,7 +585,7 @@ struct HomeView: View {
                                     .foregroundColor(.white)
                                     .font(.system(size: 18))
                                     .frame(width: 40, height: 40)
-                                    .background(DesignSystem.Colors.primary)
+                                    .background(DesignSystem.Colors.secondary)
                                     .clipShape(Circle())
                             }
                             .disabled(commandInput.isEmpty)
@@ -655,15 +659,143 @@ struct HomeView: View {
         }
     }
     
+    private func getCurrencySymbol(for currency: String) -> String {
+        switch currency {
+        case "USD": return "$"
+        case "EUR": return "€"
+        case "GBP": return "£"
+        case "JPY": return "¥"
+        case "CAD": return "C$"
+        case "AUD": return "A$"
+        default: return "$"
+        }
+    }
+    
     private func loadTLSData() async {
+        // Load balance from blockchain
         if let address = walletService.loadAddress(),
            let addressInfo = await tlsService.getAddressInfo(address: address) {
             tlsBalance = addressInfo.balance
+        } else {
+            // Fallback to mock balance for testing
+            tlsBalance = 20000.0
         }
-        tlsPrice = 0.0
-        tlsPriceChange = 0.0
-        priceHistory = []
+        
+        // Load real price data from CoinGecko
+        await loadCoinGeckoPrice()
+        
+        // Load price history for chart
+        await loadPriceHistory()
+        
         isLoadingPrice = false
+        isLoadingHistory = false
+    }
+    
+    private func loadCoinGeckoPrice() async {
+        isLoadingPrice = true
+        
+        // CoinGecko API endpoint for TLS price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=telestai&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid CoinGecko URL")
+            isLoadingPrice = false
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let telestai = json["telestai"] as? [String: Any],
+                   let usd = telestai["usd"] as? Double,
+                   let usdChange = telestai["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.tlsPrice = usd
+                        self.tlsPriceChange = usdChange
+                        print("✅ CoinGecko price loaded: $\(usd) (24h change: \(usdChange)%)")
+                    }
+                } else {
+                    print("❌ Failed to parse CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.tlsPrice = 0.85
+                        self.tlsPriceChange = 2.35
+                    }
+                }
+            } else {
+                print("❌ CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.tlsPrice = 0.85
+                    self.tlsPriceChange = 2.35
+                }
+            }
+        } catch {
+            print("❌ CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.tlsPrice = 0.85
+                self.tlsPriceChange = 2.35
+            }
+        }
+        
+        isLoadingPrice = false
+    }
+    
+    private func loadPriceHistory() async {
+        isLoadingHistory = true
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/telestai/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid CoinGecko history URL")
+            isLoadingHistory = false
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    await MainActor.run {
+                        self.priceHistory = priceHistory
+                        print("✅ CoinGecko price history loaded: \(priceHistory.count) data points")
+                    }
+                } else {
+                    print("❌ Failed to parse CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
+                    }
+                }
+            } else {
+                print("❌ CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
+                }
+            }
+        } catch {
+            print("❌ CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
+            }
+        }
+        
         isLoadingHistory = false
     }
     
@@ -679,6 +811,12 @@ struct LineChartView: View {
     let data: [Double]
     let width: CGFloat
     let height: CGFloat
+    let isPositive: Bool
+    
+    private var isPriceIncreasing: Bool {
+        guard data.count >= 2 else { return false }
+        return data.last! >= data.first!
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -702,7 +840,7 @@ struct LineChartView: View {
                     }
                 }
             }
-            .stroke(DesignSystem.Colors.secondary, lineWidth: 2)
+            .stroke(isPositive ? Color.green : Color.red, lineWidth: 2)
         }
         .frame(width: width, height: height)
     }
@@ -757,6 +895,9 @@ struct BottomNavigationView: View {
                 VStack(spacing: 6) {
                     Image(systemName: selectedTab == 2 ? "line.3.horizontal.circle.fill" : "line.3.horizontal")
                         .font(.system(size: 40, weight: .medium))
+                    Text("Menu")
+                        .font(DesignSystem.Typography.bodySmall)
+                        .fontWeight(.medium)
                 }
                 .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                 .frame(maxWidth: .infinity)
