@@ -144,7 +144,7 @@ struct ContentView: View {
                 case "prioritization":
                     PrioritizationView(messages: [], path: $path)
                 case "stats":
-                    StatsView()
+                    StatsView(path: $path)
                 case "userPortal":
                     UserPortalView(path: $path)
                 case "profile":
@@ -155,6 +155,8 @@ struct ContentView: View {
                     SettingsView(path: $path)
                 case "support":
                     SupportView(path: $path)
+                case "ai":
+                    AIFeaturesView(path: $path)
                 default:
                     EmptyView()
                 }
@@ -1544,21 +1546,6 @@ struct HamburgerMenuView: View {
                 // Menu Items
                 ScrollView {
                     VStack(spacing: 0) {
-                        MenuButton(title: "Messages", icon: "message.circle") {
-                            path.append("messaging")
-                            showHamburgerMenu = false
-                        }
-                        
-                        MenuButton(title: "Transaction History", icon: "clock.arrow.circlepath") {
-                            path.append("transactions")
-                            showHamburgerMenu = false
-                        }
-                        
-                        MenuButton(title: "Send/Receive TLS", icon: "arrow.left.arrow.right") {
-                            path.append("send")
-                            showHamburgerMenu = false
-                        }
-                        
                         MenuButton(title: "Network Stats", icon: "chart.bar") {
                             path.append("stats")
                             showHamburgerMenu = false
@@ -2103,51 +2090,125 @@ struct ReceiveView: View {
 }
 
 struct StatsView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Binding var path: NavigationPath
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
-                
-                VStack(spacing: DesignSystem.Spacing.lg) {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header with Back Button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
                     Text("Network Stats")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Text("Network statistics coming soon...")
+                    Spacer()
+                    
+                    // Placeholder for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                Spacer()
+                
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    
+                    Text("Coming Soon")
+                        .font(DesignSystem.Typography.titleLarge)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("Network statistics and analytics will be available in a future update.")
                         .font(DesignSystem.Typography.bodyMedium)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
-                .padding(DesignSystem.Spacing.xl)
+                
+                Spacer()
             }
-            .navigationBarHidden(true)
         }
     }
 }
 
 struct AIFeaturesView: View {
-    @Environment(\.dismiss) private var dismiss
+    @Binding var path: NavigationPath
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
-                
-                VStack(spacing: DesignSystem.Spacing.lg) {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header with Back Button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
                     Text("AI Features")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Text("AI features coming soon...")
+                    Spacer()
+                    
+                    // Placeholder for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                Spacer()
+                
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    Image(systemName: "brain.head.profile.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    
+                    Text("Coming Soon")
+                        .font(DesignSystem.Typography.titleLarge)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("Advanced AI features and capabilities will be available in a future update.")
                         .font(DesignSystem.Typography.bodyMedium)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
-                .padding(DesignSystem.Spacing.xl)
+                
+                Spacer()
             }
-            .navigationBarHidden(true)
         }
     }
 }
