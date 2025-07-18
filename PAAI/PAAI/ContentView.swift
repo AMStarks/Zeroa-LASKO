@@ -525,6 +525,7 @@ struct HomeView: View {
     @State private var newContactAddress = ""
     
     @StateObject private var themeManager = ThemeManager.shared
+    @FocusState private var isCommandFieldFocused: Bool
     private let walletService = WalletService.shared
     private let networkService = NetworkService.shared
 
@@ -690,8 +691,15 @@ struct HomeView: View {
                         HStack(spacing: DesignSystem.Spacing.sm) {
                             InputField("How may I help you?", text: $commandInput)
                                 .frame(maxWidth: .infinity)
+                                .focused($isCommandFieldFocused)
                                 .onSubmit {
                                     handleCommand()
+                                }
+                                .onAppear {
+                                    // Auto-focus the command field when the view appears
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        isCommandFieldFocused = true
+                                    }
                                 }
                             
                             Button(action: {
