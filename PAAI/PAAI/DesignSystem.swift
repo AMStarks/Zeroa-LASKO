@@ -4,7 +4,7 @@ import SwiftUI
 class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
     
-    @Published var currentTheme: String = "System" {
+    @Published var currentTheme: String = "Native" {
         didSet {
             updateTheme()
         }
@@ -23,6 +23,10 @@ class ThemeManager: ObservableObject {
 // MARK: - Design System
 struct DesignSystem {
     
+    static func updateTheme(_ theme: String) {
+        ThemeManager.shared.currentTheme = theme
+    }
+    
     // MARK: - Colors
     struct Colors {
         // Theme-aware colors
@@ -32,6 +36,8 @@ struct DesignSystem {
                 return Color(hex: "#4f225b")
             case "Dark":
                 return Color(hex: "#2d1b3d")
+            case "Native":
+                return Color(hex: "#4f225b")
             default: // System
                 return Color(hex: "#4f225b")
             }
@@ -43,6 +49,8 @@ struct DesignSystem {
                 return Color(hex: "#b37fc6")
             case "Dark":
                 return Color(hex: "#8a5a9a")
+            case "Native":
+                return Color(hex: "#b37fc6")
             default: // System
                 return Color(hex: "#b37fc6")
             }
@@ -54,6 +62,8 @@ struct DesignSystem {
                 return Color(hex: "#803a99")
             case "Dark":
                 return Color(hex: "#6b2d7a")
+            case "Native":
+                return Color(hex: "#803a99")
             default: // System
                 return Color(hex: "#803a99")
             }
@@ -65,6 +75,8 @@ struct DesignSystem {
                 return Color(hex: "#d6b8db")
             case "Dark":
                 return Color(hex: "#a88bb0")
+            case "Native":
+                return Color(hex: "#d6b8db")
             default: // System
                 return Color(hex: "#d6b8db")
             }
@@ -76,6 +88,8 @@ struct DesignSystem {
                 return Color(hex: "#f8f9fa")
             case "Dark":
                 return Color(hex: "#1a1a1a")
+            case "Native":
+                return Color(hex: "#4f225b")
             default: // System
                 return Color(hex: "#4f225b")
             }
@@ -87,6 +101,8 @@ struct DesignSystem {
                 return Color.white
             case "Dark":
                 return Color(hex: "#2d2d2d")
+            case "Native":
+                return Color(hex: "#4f225b").opacity(0.1)
             default: // System
                 return Color(hex: "#4f225b").opacity(0.1)
             }
@@ -97,6 +113,8 @@ struct DesignSystem {
             case "Light":
                 return Color.black
             case "Dark":
+                return Color.white
+            case "Native":
                 return Color.white
             default: // System
                 return Color.white
@@ -109,6 +127,8 @@ struct DesignSystem {
                 return Color.black.opacity(0.7)
             case "Dark":
                 return Color.white.opacity(0.7)
+            case "Native":
+                return Color.white.opacity(0.8)
             default: // System
                 return Color.white.opacity(0.8)
             }
@@ -157,6 +177,8 @@ struct DesignSystem {
                 return Color.black.opacity(0.08)
             case "Dark":
                 return Color.black.opacity(0.3)
+            case "Native":
+                return Color.black.opacity(0.1)
             default: // System
                 return Color.black.opacity(0.1)
             }
@@ -168,6 +190,8 @@ struct DesignSystem {
                 return Color.black.opacity(0.12)
             case "Dark":
                 return Color.black.opacity(0.4)
+            case "Native":
+                return Color.black.opacity(0.15)
             default: // System
                 return Color.black.opacity(0.15)
             }
@@ -179,6 +203,8 @@ struct DesignSystem {
                 return Color.black.opacity(0.16)
             case "Dark":
                 return Color.black.opacity(0.5)
+            case "Native":
+                return Color.black.opacity(0.2)
             default: // System
                 return Color.black.opacity(0.2)
             }
@@ -191,6 +217,8 @@ struct DesignSystem {
                 return Color.black.opacity(0.06)
             case "Dark":
                 return Color.black.opacity(0.25)
+            case "Native":
+                return Color.black.opacity(0.08)
             default: // System
                 return Color.black.opacity(0.08)
             }

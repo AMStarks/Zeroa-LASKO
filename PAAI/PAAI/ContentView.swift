@@ -83,6 +83,7 @@ struct ContentView: View {
     @State private var showMessaging = false
     @State private var showHamburgerMenu = false
     @State private var selectedTab = 0
+    @StateObject private var themeManager = ThemeManager.shared
 
     private let walletService = WalletService.shared
 
@@ -258,6 +259,7 @@ struct CreateAccountView: View {
     @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @StateObject private var themeManager = ThemeManager.shared
     
     private let walletService = WalletService.shared
     
@@ -373,10 +375,10 @@ struct HomeView: View {
     // Preferences
     @State private var selectedLanguage = "English"
     @State private var selectedCurrency = "USD"
-    @State private var selectedTheme = "Auto"
+    @State private var selectedTheme = "Native"
     @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
     @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
-    @State private var availableThemes = ["Auto", "Light", "Dark"]
+    @State private var availableThemes = ["Native", "Light", "Dark"]
     
     // Analytics
     @State private var showAnalytics = false
@@ -406,6 +408,7 @@ struct HomeView: View {
     @State private var newContactName = ""
     @State private var newContactAddress = ""
     
+    @StateObject private var themeManager = ThemeManager.shared
     private let walletService = WalletService.shared
     private let networkService = NetworkService.shared
 
@@ -598,7 +601,8 @@ struct HomeView: View {
                         selectedTab: $selectedTab,
                         showMessaging: $showMessaging,
                         showHamburgerMenu: $showHamburgerMenu,
-                        path: $path
+                        path: $path,
+                        themeManager: themeManager
                     )
                 }
             }
@@ -709,6 +713,7 @@ struct BottomNavigationView: View {
     @Binding var showMessaging: Bool
     @Binding var showHamburgerMenu: Bool
     @Binding var path: NavigationPath
+    @ObservedObject var themeManager: ThemeManager = .shared
     
     var body: some View {
         HStack(spacing: 0) {
@@ -901,15 +906,21 @@ struct ProfileView: View {
     @State private var showBugReport = false
     @State private var selectedLanguage = "English"
     @State private var selectedCurrency = "USD"
-    @State private var selectedTheme = "Auto"
+    @State private var selectedTheme = "Native"
     @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
     @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
-    @State private var availableThemes = ["Auto", "Light", "Dark"]
+    @State private var availableThemes = ["Native", "Light", "Dark"]
     @State private var bugDescription = ""
     @State private var bugCategory = "General"
     @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
     @State private var analyticsData: AnalyticsData?
     @State private var activeSessions: [SessionInfo] = []
+    @State private var showEditPersonalInfo = false
+    @State private var showLanguagePicker = false
+    @State private var showCurrencyPicker = false
+    @State private var showThemePicker = false
+    @StateObject private var localizationManager = LocalizationManager.shared
+    @StateObject private var themeManager = ThemeManager.shared
     private let walletService = WalletService.shared
 
     var body: some View {
@@ -933,7 +944,7 @@ struct ProfileView: View {
                     
                     Spacer()
                     
-                    Text("Profile & Settings")
+                    Text(LocalizedString.localized("profile_settings"))
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
@@ -952,7 +963,7 @@ struct ProfileView: View {
                         // Profile Picture Section
                         CardView {
                             VStack(spacing: DesignSystem.Spacing.md) {
-                                Text("Personal Information")
+                                Text(LocalizedString.localized("personal_information"))
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
                                 
@@ -977,20 +988,96 @@ struct ProfileView: View {
                                     }
                                 }
                                 
-                                Text("Tap to upload photo")
+                                Text(LocalizedString.localized("tap_to_upload_photo"))
                                     .font(DesignSystem.Typography.caption)
                                     .foregroundColor(DesignSystem.Colors.textSecondary)
                                 
-                                // Personal Info Fields
-                                VStack(spacing: DesignSystem.Spacing.sm) {
-                                    InputField("Display Name", text: $displayName)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                // Personal Info Display
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    // Display Name
+                                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                        Text(LocalizedString.localized("display_name"))
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        Text(displayName.isEmpty ? LocalizedString.localized("not_set") : displayName)
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.surface.opacity(0.5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                     
-                                    InputField("Bio", text: $userBio)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    // Bio
+                                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                        Text(LocalizedString.localized("bio"))
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        Text(userBio.isEmpty ? LocalizedString.localized("not_set") : userBio)
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                            .lineLimit(3)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.surface.opacity(0.5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                     
-                                    InputField("Location", text: $userLocation)
-                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    // Location
+                                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                        Text(LocalizedString.localized("location"))
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        Text(userLocation.isEmpty ? LocalizedString.localized("not_set") : userLocation)
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.surface.opacity(0.5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    
+                                    // Single Edit Button
+                                    Button(action: {
+                                        showEditPersonalInfo = true
+                                    }) {
+                                        HStack(spacing: DesignSystem.Spacing.sm) {
+                                            Image(systemName: "pencil")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text(LocalizedString.localized("edit"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Streaming Switch
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Stream Metadata")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Toggle("Enable", isOn: $isStreaming)
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                        .onChange(of: isStreaming) { newValue in
+                                            UserDefaults.standard.set(newValue, forKey: "user_streaming_enabled")
+                                        }
+                                    
+                                    Text("Sell your data to Advertisers")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .multilineTextAlignment(.leading)
                                 }
                             }
                         }
@@ -1111,48 +1198,72 @@ struct ProfileView: View {
                         // Preferences
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Preferences")
+                                Text(LocalizedString.localized("preferences"))
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
                                 
                                 VStack(spacing: DesignSystem.Spacing.md) {
-                                    HStack {
-                                        Text("Language")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Picker("Language", selection: $selectedLanguage) {
-                                            ForEach(availableLanguages, id: \.self) { language in
-                                                Text(language).tag(language)
-                                            }
+                                    // Language Button
+                                    Button(action: {
+                                        showLanguagePicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("language"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedLanguage)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
                                         }
-                                        .pickerStyle(MenuPickerStyle())
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
                                     
-                                    HStack {
-                                        Text("Currency")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Picker("Currency", selection: $selectedCurrency) {
-                                            ForEach(availableCurrencies, id: \.self) { currency in
-                                                Text(currency).tag(currency)
-                                            }
+                                    // Currency Button
+                                    Button(action: {
+                                        showCurrencyPicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("currency"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedCurrency)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
                                         }
-                                        .pickerStyle(MenuPickerStyle())
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
                                     
-                                    HStack {
-                                        Text("Theme")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Picker("Theme", selection: $selectedTheme) {
-                                            ForEach(availableThemes, id: \.self) { theme in
-                                                Text(theme).tag(theme)
-                                            }
+                                    // Theme Button
+                                    Button(action: {
+                                        showThemePicker = true
+                                    }) {
+                                        HStack {
+                                            Text(LocalizedString.localized("theme"))
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Text(selectedTheme)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Image(systemName: "chevron.down")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(DesignSystem.Colors.secondary)
                                         }
-                                        .pickerStyle(MenuPickerStyle())
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
                                 }
                             }
@@ -1233,8 +1344,8 @@ struct ProfileView: View {
                         
                         // Action Buttons
                         VStack(spacing: DesignSystem.Spacing.md) {
-                            PrimaryButton("Test Connection") {
-                                testConnection()
+                            PrimaryButton("Log Out") {
+                                logout()
                             }
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -1263,6 +1374,24 @@ struct ProfileView: View {
         .sheet(isPresented: $showBugReport) {
             BugReportView(bugDescription: $bugDescription, bugCategory: $bugCategory, bugCategories: bugCategories)
         }
+        .sheet(isPresented: $showEditPersonalInfo) {
+            EditPersonalInfoView(displayName: $displayName, userBio: $userBio, userLocation: $userLocation)
+        }
+        .sheet(isPresented: $showLanguagePicker) {
+            PreferencePickerView(title: "Language", selection: $selectedLanguage, options: availableLanguages, onSelectionChanged: { newLanguage in
+                saveLanguage(newLanguage)
+            })
+        }
+        .sheet(isPresented: $showCurrencyPicker) {
+            PreferencePickerView(title: "Currency", selection: $selectedCurrency, options: availableCurrencies, onSelectionChanged: { newCurrency in
+                saveCurrency(newCurrency)
+            })
+        }
+        .sheet(isPresented: $showThemePicker) {
+            PreferencePickerView(title: "Theme", selection: $selectedTheme, options: availableThemes, onSelectionChanged: { newTheme in
+                saveTheme(newTheme)
+            })
+        }
         .onAppear {
             loadSettings()
         }
@@ -1277,13 +1406,59 @@ struct ProfileView: View {
         return address
     }
     
+    private func logout() {
+        walletService.keychain.delete(key: "wallet_mnemonic")
+        path.removeLast(path.count)
+    }
+    
     private func testConnection() {
         alertMessage = "Connection test completed successfully!"
         showAlert = true
     }
     
     private func loadSettings() {
-        // Load saved settings here
+        // Load saved preferences from UserDefaults
+        selectedLanguage = UserDefaults.standard.string(forKey: "user_language") ?? "English"
+        selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
+        selectedTheme = UserDefaults.standard.string(forKey: "user_theme") ?? "Native"
+        isStreaming = UserDefaults.standard.bool(forKey: "user_streaming_enabled")
+        
+        // Apply loaded settings
+        LocalizationManager.shared.currentLanguage = selectedLanguage
+        DesignSystem.updateTheme(selectedTheme)
+    }
+    
+    private func saveLanguage(_ language: String) {
+        selectedLanguage = language
+        UserDefaults.standard.set(language, forKey: "user_language")
+        applyLanguageSettings(language)
+    }
+    
+    private func saveCurrency(_ currency: String) {
+        selectedCurrency = currency
+        UserDefaults.standard.set(currency, forKey: "user_currency")
+        applyCurrencySettings(currency)
+    }
+    
+    private func saveTheme(_ theme: String) {
+        selectedTheme = theme
+        UserDefaults.standard.set(theme, forKey: "user_theme")
+        applyThemeSettings(theme)
+    }
+    
+    private func applyLanguageSettings(_ language: String) {
+        // Apply language changes throughout the app
+        LocalizationManager.shared.currentLanguage = language
+    }
+    
+    private func applyCurrencySettings(_ currency: String) {
+        // Apply currency changes throughout the app
+        // Currency changes can be implemented here when needed
+    }
+    
+    private func applyThemeSettings(_ theme: String) {
+        // Apply theme changes throughout the app
+        DesignSystem.updateTheme(theme)
     }
 }
 
@@ -1838,6 +2013,9 @@ struct BugReportView: View {
 
 struct EditPersonalInfoView: View {
     @Environment(\.dismiss) private var dismiss
+    @Binding var displayName: String
+    @Binding var userBio: String
+    @Binding var userLocation: String
     
     var body: some View {
         NavigationView {
@@ -1854,7 +2032,7 @@ struct EditPersonalInfoView: View {
                         
                         Spacer()
                         
-                        Text("Edit Profile")
+                        Text("Edit Personal Info")
                             .font(DesignSystem.Typography.titleMedium)
                             .foregroundColor(DesignSystem.Colors.text)
                         
@@ -1868,14 +2046,30 @@ struct EditPersonalInfoView: View {
                     .padding(.horizontal, DesignSystem.Spacing.lg)
                     .padding(.top, DesignSystem.Spacing.lg)
                     
-                    VStack(spacing: DesignSystem.Spacing.md) {
-                        InputField("Display Name", text: .constant(""))
-                        InputField("Bio", text: .constant(""))
-                        InputField("Location", text: .constant(""))
+                    ScrollView {
+                        VStack(spacing: DesignSystem.Spacing.lg) {
+                            CardView {
+                                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                    Text("Personal Information")
+                                        .font(DesignSystem.Typography.headline)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    VStack(spacing: DesignSystem.Spacing.md) {
+                                        InputField("Display Name", text: $displayName)
+                                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        
+                                        InputField("Bio", text: $userBio)
+                                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                                        
+                                        InputField("Location", text: $userLocation)
+                                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                        }
+                        .padding(.vertical, DesignSystem.Spacing.lg)
                     }
-                    .padding(.horizontal, DesignSystem.Spacing.lg)
-                    
-                    Spacer()
                 }
             }
             .navigationBarHidden(true)
@@ -2034,6 +2228,78 @@ struct SubscriptionView: View {
                     }
                 }
                 .padding(DesignSystem.Spacing.xl)
+            }
+            .navigationBarHidden(true)
+        }
+    }
+}
+
+// MARK: - Preference Picker View
+struct PreferencePickerView: View {
+    let title: String
+    @Binding var selection: String
+    let options: [String]
+    let onSelectionChanged: ((String) -> Void)?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Spacer()
+                        
+                        Text(title)
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                        
+                        Button("Done") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    
+                    ScrollView {
+                        VStack(spacing: DesignSystem.Spacing.sm) {
+                            ForEach(options, id: \.self) { option in
+                                Button(action: {
+                                    selection = option
+                                    onSelectionChanged?(option)
+                                    dismiss()
+                                }) {
+                                    HStack {
+                                        Text(option)
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        
+                                        Spacer()
+                                        
+                                        if selection == option {
+                                            Image(systemName: "checkmark")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                        }
+                                    }
+                                    .padding(DesignSystem.Spacing.md)
+                                    .background(selection == option ? DesignSystem.Colors.secondary.opacity(0.1) : DesignSystem.Colors.surface)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
             }
             .navigationBarHidden(true)
         }
