@@ -211,7 +211,7 @@ struct ConversationsTabView: View {
                 
                 // Message Input (if contact selected)
                 if selectedContact != nil {
-                    MessageInputView(
+                    HybridMessageInputView(
                         messageText: $messageText,
                         onSend: onSendMessage
                     )
@@ -383,7 +383,7 @@ struct ContactRowView: View {
 }
 
 // MARK: - Message Input View
-struct MessageInputView: View {
+struct HybridMessageInputView: View {
     @Binding var messageText: String
     let onSend: () -> Void
     

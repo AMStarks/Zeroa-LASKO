@@ -157,6 +157,12 @@ struct ContentView: View {
                     SupportView(path: $path)
                 case "ai":
                     AIFeaturesView(path: $path)
+                case "ai-companion":
+                    CompanionManagementView()
+                case "ai-companion-conversation":
+                    CompanionConversationView()
+                case "ai-companion-settings":
+                    CompanionSettingsView()
                 default:
                     EmptyView()
                 }
@@ -1452,7 +1458,7 @@ struct BottomNavigationView: View {
             }) {
                 VStack(spacing: 6) {
                     Image(systemName: selectedTab == 0 ? "person.circle.fill" : "person.circle")
-                        .font(.system(size: 40, weight: .medium))
+                        .font(.system(size: 32, weight: .medium))
                     Text("Profile")
                         .font(DesignSystem.Typography.bodySmall)
                         .fontWeight(.medium)
@@ -1468,7 +1474,7 @@ struct BottomNavigationView: View {
             }) {
                 VStack(spacing: 6) {
                     Image(systemName: selectedTab == 1 ? "message.circle.fill" : "message.circle")
-                        .font(.system(size: 40, weight: .medium))
+                        .font(.system(size: 32, weight: .medium))
                     Text("Messages")
                         .font(DesignSystem.Typography.bodySmall)
                         .fontWeight(.medium)
@@ -1477,19 +1483,35 @@ struct BottomNavigationView: View {
                 .frame(maxWidth: .infinity)
             }
             
-            // Menu Tab
+            // AI Companion Tab
             Button(action: {
                 selectedTab = 2
-                showHamburgerMenu = true
+                path.append("ai-companion")
             }) {
                 VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 2 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
-                        .font(.system(size: 40, weight: .medium))
-                    Text("Menu")
+                    Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
+                        .font(.system(size: 32, weight: .medium))
+                    Text("AI")
                         .font(DesignSystem.Typography.bodySmall)
                         .fontWeight(.medium)
                 }
                 .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+            }
+            
+            // Menu Tab
+            Button(action: {
+                selectedTab = 3
+                showHamburgerMenu = true
+            }) {
+                VStack(spacing: 6) {
+                    Image(systemName: selectedTab == 3 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
+                        .font(.system(size: 32, weight: .medium))
+                    Text("Menu")
+                        .font(DesignSystem.Typography.bodySmall)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(selectedTab == 3 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                 .frame(maxWidth: .infinity)
             }
         }
