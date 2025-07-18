@@ -8,10 +8,20 @@ class LocalizationManager: ObservableObject {
     @Published var currentLanguage: String = "English" {
         didSet {
             updateLanguage()
+            // Save to UserDefaults
+            UserDefaults.standard.set(currentLanguage, forKey: "user_language")
         }
     }
     
     private init() {
+        // Load saved language from UserDefaults
+        if let savedLanguage = UserDefaults.standard.string(forKey: "user_language") {
+            currentLanguage = savedLanguage
+        } else {
+            // Default to English if no saved language
+            currentLanguage = "English"
+            UserDefaults.standard.set("English", forKey: "user_language")
+        }
         updateLanguage()
     }
     

@@ -590,8 +590,8 @@ struct HomeView: View {
                             }
                             .disabled(commandInput.isEmpty)
                         }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.lg + DesignSystem.Spacing.md)
                     
                     // ZeroaFinger Image
                     Image("ZeroaFinger")
@@ -694,6 +694,45 @@ struct HomeView: View {
     private func loadCoinGeckoPrice() async {
         isLoadingPrice = true
         
+        // Check rate limit first
+        if let rateLimitUntil = UserDefaults.standard.object(forKey: "rate_limit_until") as? Date,
+           Date() < rateLimitUntil {
+            print("⚠️ Rate limit active until \(rateLimitUntil)")
+            // Use cached data if available, otherwise fallback
+            if let cachedPrice = UserDefaults.standard.object(forKey: "cached_tls_price") as? Double,
+               let cachedChange = UserDefaults.standard.object(forKey: "cached_tls_change") as? Double {
+                await MainActor.run {
+                    self.tlsPrice = cachedPrice
+                    self.tlsPriceChange = cachedChange
+                    print("✅ Using cached price during rate limit: $\(cachedPrice)")
+                }
+            } else {
+                await MainActor.run {
+                    self.tlsPrice = 0.85
+                    self.tlsPriceChange = 2.35
+                }
+            }
+            isLoadingPrice = false
+            return
+        }
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_tls_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_tls_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_tls_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.tlsPrice = cachedPrice
+                    self.tlsPriceChange = cachedChange
+                    print("✅ Using cached price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                isLoadingPrice = false
+                return
+            }
+        }
+        
         // CoinGecko API endpoint for TLS price
         let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=telestai&vs_currencies=usd&include_24hr_change=true"
         
@@ -716,6 +755,11 @@ struct HomeView: View {
                         self.tlsPrice = usd
                         self.tlsPriceChange = usdChange
                         print("✅ CoinGecko price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_tls_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_tls_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_tls_time")
                     }
                 } else {
                     print("❌ Failed to parse CoinGecko response")
@@ -727,6 +771,16 @@ struct HomeView: View {
                 }
             } else {
                 print("❌ CoinGecko API error: \(response)")
+                
+                // Check if rate limited
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                    let retryAfter = httpResponse.value(forHTTPHeaderField: "retry-after") ?? "60"
+                    print("⚠️ Rate limited. Retry after \(retryAfter) seconds")
+                    
+                    // Store rate limit info for future requests
+                    UserDefaults.standard.set(Date().addingTimeInterval(Double(retryAfter) ?? 60), forKey: "rate_limit_until")
+                }
+                
                 // Fallback to mock data
                 await MainActor.run {
                     self.tlsPrice = 0.85
@@ -747,6 +801,21 @@ struct HomeView: View {
     
     private func loadPriceHistory() async {
         isLoadingHistory = true
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_tls_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_tls_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.priceHistory = cachedHistory
+                    print("✅ Using cached history: \(cachedHistory.count) data points")
+                }
+                isLoadingHistory = false
+                return
+            }
+        }
         
         // CoinGecko API endpoint for 7-day price history
         let urlString = "https://api.coingecko.com/api/v3/coins/telestai/market_chart?vs_currency=usd&days=7"
@@ -773,6 +842,10 @@ struct HomeView: View {
                     await MainActor.run {
                         self.priceHistory = priceHistory
                         print("✅ CoinGecko price history loaded: \(priceHistory.count) data points")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(priceHistory, forKey: "cached_tls_history")
+                        UserDefaults.standard.set(Date(), forKey: "cached_tls_history_time")
                     }
                 } else {
                     print("❌ Failed to parse CoinGecko history response")
@@ -905,7 +978,7 @@ struct BottomNavigationView: View {
         }
         .padding(.vertical, DesignSystem.Spacing.md)
         .padding(.bottom, -60) // Negative padding to push beyond safe area
-        .background(DesignSystem.Colors.surface)
+        .background(DesignSystem.Colors.background)
         .overlay(
             Rectangle()
                 .frame(height: 1)

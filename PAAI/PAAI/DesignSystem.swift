@@ -7,10 +7,20 @@ class ThemeManager: ObservableObject {
     @Published var currentTheme: String = "Native" {
         didSet {
             updateTheme()
+            // Save to UserDefaults
+            UserDefaults.standard.set(currentTheme, forKey: "user_theme")
         }
     }
     
     private init() {
+        // Load saved theme from UserDefaults
+        if let savedTheme = UserDefaults.standard.string(forKey: "user_theme") {
+            currentTheme = savedTheme
+        } else {
+            // Default to Native if no saved theme
+            currentTheme = "Native"
+            UserDefaults.standard.set("Native", forKey: "user_theme")
+        }
         updateTheme()
     }
     
