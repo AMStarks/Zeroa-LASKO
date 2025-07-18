@@ -2098,19 +2098,8 @@ struct StatsView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Header with Back Button
+                // Header
                 HStack {
-                    Button(action: {
-                        path.removeLast()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(DesignSystem.Colors.text)
-                            .font(.system(size: 20))
-                            .padding(DesignSystem.Spacing.sm)
-                            .background(DesignSystem.Colors.surface)
-                            .clipShape(Circle())
-                    }
-                    
                     Spacer()
                     
                     Text("Network Stats")
@@ -2118,11 +2107,6 @@ struct StatsView: View {
                         .foregroundColor(DesignSystem.Colors.text)
                     
                     Spacer()
-                    
-                    // Placeholder for symmetry
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 44, height: 44)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.top, DesignSystem.Spacing.lg)
@@ -2160,19 +2144,8 @@ struct AIFeaturesView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Header with Back Button
+                // Header
                 HStack {
-                    Button(action: {
-                        path.removeLast()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .foregroundColor(DesignSystem.Colors.text)
-                            .font(.system(size: 20))
-                            .padding(DesignSystem.Spacing.sm)
-                            .background(DesignSystem.Colors.surface)
-                            .clipShape(Circle())
-                    }
-                    
                     Spacer()
                     
                     Text("AI Features")
@@ -2180,11 +2153,6 @@ struct AIFeaturesView: View {
                         .foregroundColor(DesignSystem.Colors.text)
                     
                     Spacer()
-                    
-                    // Placeholder for symmetry
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 44, height: 44)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.top, DesignSystem.Spacing.lg)
