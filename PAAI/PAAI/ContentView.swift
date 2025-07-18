@@ -525,7 +525,11 @@ struct HomeView: View {
     @State private var newContactAddress = ""
     
     @StateObject private var themeManager = ThemeManager.shared
-    @FocusState private var isCommandFieldFocused: Bool
+    @FocusState private var isCommandFieldFocused: Bool {
+        didSet {
+            print("🔍 Focus state changed: \(isCommandFieldFocused)")
+        }
+    }
     private let walletService = WalletService.shared
     private let networkService = NetworkService.shared
 
@@ -702,14 +706,33 @@ struct HomeView: View {
                                         .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 1)
                                 )
                                 .focused($isCommandFieldFocused)
+                                .textInputAutocapitalization(.never)
+                                .disableAutocorrection(true)
+                                .keyboardType(.default)
+                                .submitLabel(.done)
                                 .onSubmit {
                                     handleCommand()
                                 }
                                 .onAppear {
+                                    print("🔍 TextField appeared, setting focus...")
                                     // Auto-focus the command field when the view appears
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        print("🔍 Setting focus to command field")
                                         isCommandFieldFocused = true
                                     }
+                                }
+                                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                                    print("🔍 Keyboard did show")
+                                }
+                                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+                                    print("🔍 Keyboard did hide")
+                                }
+                                .onChange(of: commandInput) { newValue in
+                                    print("🔍 TextField value changed: '\(newValue)'")
+                                }
+                                .onTapGesture {
+                                    print("🔍 TextField tapped")
+                                    isCommandFieldFocused = true
                                 }
                             
                             Button(action: {
