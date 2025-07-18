@@ -26,22 +26,22 @@ class TLSLayer2MessagingService: ObservableObject {
     
     // MARK: - P2P Network Setup
     private func setupP2PNetwork() {
-        // Check if we're in simulator (which has P2P limitations)
+        // Check if we're in simulator (which has Switchboard limitations)
         #if targetEnvironment(simulator)
         DispatchQueue.main.async {
-            self.connectionStatus = "Simulator Mode - P2P Limited"
+            self.connectionStatus = "Simulator Mode - Switchboard Limited"
             self.isConnected = false
         }
         return
         #endif
         
-        // Create P2P listener for incoming connections
+        // Create Switchboard listener for incoming connections
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
         
         do {
             listener = try NWListener(using: parameters)
-            listener?.service = NWListener.Service(name: "PAAI-Messaging", type: serviceType)
+            listener?.service = NWListener.Service(name: "PAAI-Switchboard", type: serviceType)
             
             listener?.stateUpdateHandler = { [weak self] state in
                 DispatchQueue.main.async {
@@ -64,7 +64,7 @@ class TLSLayer2MessagingService: ObservableObject {
             
             listener?.start(queue: .main)
             
-            // Start browsing for other P2P peers
+            // Start browsing for other Switchboard peers
             startPeerDiscovery()
             
         } catch {
@@ -88,7 +88,7 @@ class TLSLayer2MessagingService: ObservableObject {
                     case .ready:
                         self?.handleDiscoveredPeers()
                     case .failed(let error):
-                        print("❌ P2P Browser failed: \(error)")
+                        print("❌ Switchboard Browser failed: \(error)")
                         self?.connectionStatus = "Discovery Failed: \(error.localizedDescription)"
                     default:
                         break
@@ -106,7 +106,7 @@ class TLSLayer2MessagingService: ObservableObject {
     
     private func handleDiscoveredPeers() {
         browser?.browseResultsChangedHandler = { [weak self] results, _ in
-            print("🔍 Discovered \(results.count) P2P peers")
+            print("🔍 Discovered \(results.count) Switchboard peers")
             for result in results {
                 self?.connectToPeer(result.endpoint)
             }
@@ -120,12 +120,12 @@ class TLSLayer2MessagingService: ObservableObject {
             DispatchQueue.main.async {
                 switch state {
                 case .ready:
-                    print("✅ P2P connection established")
+                    print("✅ Switchboard connection established")
                     self?.handleP2PConnection(connection)
                 case .failed(let error):
-                    print("❌ P2P connection failed: \(error)")
+                    print("❌ Switchboard connection failed: \(error)")
                 case .cancelled:
-                    print("🔌 P2P connection cancelled")
+                    print("🔌 Switchboard connection cancelled")
                 default:
                     break
                 }
@@ -135,11 +135,11 @@ class TLSLayer2MessagingService: ObservableObject {
         connection.start(queue: .main)
     }
     
-    // MARK: - P2P Message Handling
+    // MARK: - Switchboard Message Handling
     private func handleP2PConnection(_ connection: NWConnection) {
         connection.receiveMessage { [weak self] content, context, isComplete, error in
             if let error = error {
-                print("❌ P2P receive error: \(error)")
+                print("❌ Switchboard receive error: \(error)")
                 return
             }
             
@@ -197,11 +197,11 @@ class TLSLayer2MessagingService: ObservableObject {
         guard let signature = await signMessage(message) else { return false }
         message.signature = signature
         
-        // Send via P2P connection
+        // Send via Switchboard connection
         if let connection = p2pConnections[address] {
             return await sendMessageViaP2P(message, through: connection)
         } else {
-            // Fallback to blockchain if P2P not available
+            // Fallback to blockchain if Switchboard not available
             return await sendMessageViaBlockchain(message)
         }
     }
@@ -212,7 +212,7 @@ class TLSLayer2MessagingService: ObservableObject {
         return await withCheckedContinuation { continuation in
             connection.send(content: messageData) { error in
                 if let error = error {
-                    print("❌ P2P send error: \(error)")
+                    print("❌ Switchboard send error: \(error)")
                 }
                 continuation.resume(returning: error == nil)
             }

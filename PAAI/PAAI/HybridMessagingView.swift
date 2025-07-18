@@ -34,7 +34,7 @@ struct HybridMessagingView: View {
                     
                     Spacer()
                     
-                    Text("P2P Messaging")
+                    Text("Switchboard")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
@@ -315,7 +315,7 @@ struct ContactsTabView: View {
                             .font(DesignSystem.Typography.titleMedium)
                             .foregroundColor(DesignSystem.Colors.text)
                         
-                        Text("Add contacts to start P2P messaging")
+                        Text("Add contacts to start Switchboard messaging")
                             .font(DesignSystem.Typography.bodyMedium)
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -519,11 +519,11 @@ struct P2PSettingsView: View {
                             }
                             
                             if p2pService.isConnected {
-                                Text("✅ P2P network active - Messages will be sent instantly")
+                                Text("✅ Switchboard network active - Messages will be sent instantly")
                                     .font(DesignSystem.Typography.bodySmall)
                                     .foregroundColor(.green)
                             } else {
-                                Text("⚠️ P2P network unavailable - Messages will use blockchain fallback")
+                                Text("⚠️ Switchboard network unavailable - Messages will use blockchain fallback")
                                     .font(DesignSystem.Typography.bodySmall)
                                     .foregroundColor(.orange)
                             }
@@ -558,7 +558,7 @@ struct P2PSettingsView: View {
                                 
                                 SecurityFeatureRow(
                                     icon: "network",
-                                    title: "P2P Network",
+                                    title: "Switchboard Network",
                                     description: "Direct peer-to-peer connections, no central servers"
                                 )
                                 
