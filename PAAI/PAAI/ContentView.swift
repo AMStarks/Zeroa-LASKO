@@ -760,10 +760,250 @@ struct HomeView: View {
     private func handleCommand() {
         guard !commandInput.isEmpty else { return }
         
-        let response = assistantService.generateContextualResponse(to: commandInput, context: ["balance": tlsBalance])
-        alertMessage = response
-        showAlert = true
+        let userInput = commandInput
         commandInput = ""
+        
+        // Create enhanced prompt with context
+        let enhancedPrompt = """
+        You are an AI assistant for a blockchain app. The user has a balance of \(String(format: "%.6f", tlsBalance)) TLS.
+        
+        User request: \(userInput)
+        
+        Respond with a JSON object containing:
+        - "action": The action to perform (e.g., "add meeting", "open maps", "check balance", "send payment")
+        - "parameters": A dictionary of parameters needed for the action
+        - "response": A natural language response to the user
+        
+        Available actions:
+        - "add meeting": Schedule a calendar event (requires "title", "start", "end")
+        - "open maps": Navigate to a location (requires "location")
+        - "open safari": Open a website (requires "url")
+        - "open messages": Send a text message (requires "contact", "message")
+        - "open phone": Make a phone call (requires "contact")
+        - "open mail": Send an email (requires "to", "subject")
+        - "open camera": Take a photo
+        - "open photos": Open photo gallery
+        - "open settings": Open device settings
+        - "open notes": Create a note (requires "title", "content")
+        - "prioritize messages": Analyze and prioritize messages
+        - "tell main stats": Show blockchain statistics
+        - "sign message": Sign a message with wallet (requires "message")
+        - "check balance": Check current TLS balance
+        - "send payment": Send TLS payment (requires "to", "amount")
+        
+        Use UTC timezone and assume today is 2025-07-15. Return ONLY the JSON object, no additional text or explanation.
+        """
+        
+        print("Sending enhanced AI request: \(enhancedPrompt)")
+        NetworkService.shared.getGrokResponse(input: enhancedPrompt) { result in
+            print("Enhanced AI result: \(result)")
+            switch result {
+            case .success(let response):
+                print("🤖 AI Response: \(response)")
+                // Try to extract JSON from the response (it might contain extra text)
+                let cleanResponse = self.extractJSONFromResponse(response)
+                do {
+                    if let data = cleanResponse.data(using: .utf8),
+                       let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let action = json["action"] as? String {
+                        print("✅ Parsed action: \(action), json: \(json)")
+                        let parameters = json["parameters"] as? [String: Any] ?? [:]
+                        print("📋 Parameters: \(parameters)")
+                        
+                        DispatchQueue.main.async {
+                            if let responseText = json["response"] as? String {
+                                self.alertMessage = responseText
+                                self.showAlert = true
+                            }
+                            self.handleAction(action: action, parameters: parameters)
+                        }
+                    } else {
+                        print("❌ Failed to parse JSON response")
+                        print("📄 Raw response: \(response)")
+                        DispatchQueue.main.async {
+                            self.alertMessage = "I received a response but couldn't parse it properly."
+                            self.showAlert = true
+                        }
+                    }
+                } catch {
+                    print("❌ JSON parsing error: \(error)")
+                    DispatchQueue.main.async {
+                        self.alertMessage = "I received a response but couldn't parse it properly."
+                        self.showAlert = true
+                    }
+                }
+            case .failure(let error):
+                print("AI request failed: \(error)")
+                DispatchQueue.main.async {
+                    self.alertMessage = "I'm sorry, I couldn't process that request. Please try again."
+                    self.showAlert = true
+                }
+            }
+        }
+    }
+    
+    private func extractJSONFromResponse(_ response: String) -> String {
+        // Try to extract JSON from the response (AI might add extra text)
+        if let startIndex = response.firstIndex(of: "{"),
+           let endIndex = response.lastIndex(of: "}") {
+            let jsonStart = response.index(startIndex, offsetBy: 0)
+            let jsonEnd = response.index(endIndex, offsetBy: 1)
+            return String(response[jsonStart..<jsonEnd])
+        }
+        return response
+    }
+    
+    private func handleAction(action: String, parameters: [String: Any]) {
+        print("🔧 Handling action: \(action) with parameters: \(parameters)")
+        
+        switch action {
+        case "add meeting", "schedule meeting":
+            print("📅 Scheduling meeting with parameters: \(parameters)")
+            
+            // Handle missing parameters with defaults
+            let title = parameters["title"] as? String ?? "Meeting"
+            let start = parameters["start"] as? String
+            let end = parameters["end"] as? String
+            
+            if let startString = start,
+               let startDate = ISO8601DateFormatter().date(from: startString) {
+                // If we have a start time, calculate end time (1 hour later if not provided)
+                let endDate: Date
+                if let endString = end,
+                   let parsedEndDate = ISO8601DateFormatter().date(from: endString) {
+                    endDate = parsedEndDate
+                } else {
+                    // Default to 1 hour duration
+                    endDate = startDate.addingTimeInterval(3600)
+                }
+                
+                print("✅ Valid meeting parameters, adding to calendar")
+                addToCalendar(title: title, start: startDate, end: endDate)
+            } else {
+                print("❌ Invalid meeting parameters - missing start time")
+                alertMessage = "Please specify a meeting time"
+                showAlert = true
+            }
+            
+        case "open maps", "navigate to":
+            // Handle both single location and start/end locations
+            if let location = parameters["location"] as? String {
+                openMaps(location: location)
+            } else if let startLocation = parameters["start_location"] as? String,
+                      let endLocation = parameters["end_location"] as? String {
+                // For navigation between two points, use the destination
+                openMaps(location: "\(startLocation) to \(endLocation)")
+            } else if let endLocation = parameters["end_location"] as? String {
+                // If only end location is provided, use that
+                openMaps(location: endLocation)
+            } else {
+                alertMessage = "Please specify a location"
+                showAlert = true
+            }
+            
+        case "open safari", "open website", "browse":
+            if let url = parameters["url"] as? String {
+                openURL(url: url)
+            }
+            
+        case "open messages", "send message", "text":
+            if let contact = parameters["contact"] as? String,
+               let message = parameters["message"] as? String {
+                openMessages(contact: contact, message: message)
+            } else {
+                alertMessage = "Please specify a contact and message"
+                showAlert = true
+            }
+            
+        case "open phone", "call":
+            if let contact = parameters["contact"] as? String {
+                openPhone(contact: contact)
+            } else {
+                alertMessage = "Please specify a contact to call"
+                showAlert = true
+            }
+            
+        case "open mail", "send email":
+            if let to = parameters["to"] as? String {
+                let subject = parameters["subject"] as? String ?? "Message from PAAI"
+                openMail(to: to, subject: subject)
+            } else {
+                alertMessage = "Please specify an email address"
+                showAlert = true
+            }
+            
+        case "open camera", "take photo":
+            openCamera()
+            
+        case "open photos":
+            openPhotos()
+            
+        case "open settings":
+            openSettings()
+            
+        case "open notes", "create note":
+            if let title = parameters["title"] as? String,
+               let content = parameters["content"] as? String {
+                openNotes(title: title, content: content)
+            } else {
+                openNotes(title: "New Note", content: "")
+            }
+            
+        case "prioritize messages":
+            print("📋 Prioritizing messages")
+            loadAndPrioritizeMessages()
+            path.append("prioritization")
+            
+        case "tell main stats":
+            print("📊 Fetching blockchain stats")
+            fetchBlockchainInfo()
+            path.append("stats")
+            
+        case "sign message":
+            print("✍️ Signing message with parameters: \(parameters)")
+            if let message = parameters["message"] as? String,
+               let signature = walletService.signMessage(message) {
+                let result = "Signed: \(message) (Signature: \(signature))"
+                print("✅ Message signed successfully: \(result)")
+                alertMessage = result
+                showAlert = true
+            } else {
+                print("❌ Failed to sign message")
+                alertMessage = "Failed to sign message"
+                showAlert = true
+            }
+            
+        case "check balance":
+            print("💰 Checking balance")
+            Task {
+                await tlsService.refreshBalance()
+                await MainActor.run {
+                    let balance = tlsService.formatBalance(tlsService.currentBalance)
+                    print("✅ Balance: \(balance)")
+                    alertMessage = "Balance: \(balance)"
+                    showAlert = true
+                }
+            }
+            
+        case "send payment":
+            if let toAddress = parameters["to"] as? String,
+               let amount = parameters["amount"] as? Double {
+                Task {
+                    let response = await tlsService.sendPayment(toAddress: toAddress, amount: amount)
+                    await MainActor.run {
+                        if response.success {
+                            alertMessage = "Payment successful! TXID: \(response.txid ?? "Unknown")"
+                        } else {
+                            alertMessage = "Payment failed: \(response.error ?? "Unknown error")"
+                        }
+                        showAlert = true
+                    }
+                }
+            }
+            
+        default:
+            print("❓ Unknown action: \(action)")
+        }
     }
     
     private func initialize() {
@@ -991,6 +1231,124 @@ struct HomeView: View {
     private func logout() {
         walletService.keychain.delete(key: "wallet_mnemonic")
         path.removeLast(path.count)
+    }
+    
+    // MARK: - Action Helper Functions
+    private func addToCalendar(title: String, start: Date, end: Date) {
+        let eventStore = EKEventStore()
+        
+        // Request calendar access
+        eventStore.requestFullAccessToEvents { granted, error in
+            DispatchQueue.main.async {
+                if granted {
+                    let event = EKEvent(eventStore: eventStore)
+                    event.title = title
+                    event.startDate = start
+                    event.endDate = end
+                    event.calendar = eventStore.defaultCalendarForNewEvents
+                    
+                    do {
+                        try eventStore.save(event, span: .thisEvent)
+                        print("✅ Event saved to calendar: \(title)")
+                        self.alertMessage = "Meeting scheduled: \(title)"
+                        self.showAlert = true
+                    } catch {
+                        print("❌ Failed to save event: \(error)")
+                        self.alertMessage = "Failed to schedule meeting"
+                        self.showAlert = true
+                    }
+                } else {
+                    print("❌ Calendar access denied")
+                    self.alertMessage = "Calendar access required to schedule meetings"
+                    self.showAlert = true
+                }
+            }
+        }
+    }
+    
+    private func openMaps(location: String) {
+        let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location
+        if let url = URL(string: "maps://?q=\(encodedLocation)") {
+            UIApplication.shared.open(url)
+            print("🗺️ Opening maps for: \(location)")
+        }
+    }
+    
+    private func openURL(url: String) {
+        var urlString = url
+        if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+            urlString = "https://" + urlString
+        }
+        
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+            print("🌐 Opening URL: \(urlString)")
+        }
+    }
+    
+    private func openMessages(contact: String, message: String) {
+        let encodedMessage = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? message
+        if let url = URL(string: "sms:\(contact)&body=\(encodedMessage)") {
+            UIApplication.shared.open(url)
+            print("💬 Opening messages for: \(contact)")
+        }
+    }
+    
+    private func openPhone(contact: String) {
+        if let url = URL(string: "tel:\(contact)") {
+            UIApplication.shared.open(url)
+            print("📞 Opening phone for: \(contact)")
+        }
+    }
+    
+    private func openMail(to: String, subject: String) {
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        if let url = URL(string: "mailto:\(to)?subject=\(encodedSubject)") {
+            UIApplication.shared.open(url)
+            print("📧 Opening mail for: \(to)")
+        }
+    }
+    
+    private func openCamera() {
+        // This would typically open the camera app
+        print("📷 Camera functionality would open camera app")
+        alertMessage = "Camera functionality would open camera app"
+        showAlert = true
+    }
+    
+    private func openPhotos() {
+        // This would typically open the photos app
+        print("🖼️ Photos functionality would open photos app")
+        alertMessage = "Photos functionality would open photos app"
+        showAlert = true
+    }
+    
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+            print("⚙️ Opening settings")
+        }
+    }
+    
+    private func openNotes(title: String, content: String) {
+        // This would typically open the notes app
+        print("📝 Notes functionality would create note: \(title)")
+        alertMessage = "Notes functionality would create note: \(title)"
+        showAlert = true
+    }
+    
+    private func loadAndPrioritizeMessages() {
+        // Mock implementation for message prioritization
+        print("📋 Loading and prioritizing messages")
+        alertMessage = "Message prioritization feature coming soon"
+        showAlert = true
+    }
+    
+    private func fetchBlockchainInfo() {
+        // Mock implementation for blockchain stats
+        print("📊 Fetching blockchain information")
+        alertMessage = "Blockchain statistics feature coming soon"
+        showAlert = true
     }
 }
 
