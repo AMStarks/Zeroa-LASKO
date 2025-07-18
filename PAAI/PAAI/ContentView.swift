@@ -150,11 +150,7 @@ struct ContentView: View {
                 case "profile":
                     ProfileView(path: $path)
                 case "messaging":
-                    ConversationsListView(
-                        conversations: $conversations,
-                        currentConversation: $currentConversation,
-                        showNewChat: $showNewChat
-                    )
+                    HybridMessagingView()
                 case "settings":
                     SettingsView(path: $path)
                 case "support":
@@ -180,11 +176,7 @@ struct ContentView: View {
             TransactionsView()
         }
         .sheet(isPresented: $showMessaging) {
-            ConversationsListView(
-                conversations: $conversations,
-                currentConversation: $currentConversation,
-                showNewChat: $showNewChat
-            )
+            HybridMessagingView()
         }
         .sheet(isPresented: $showNewChat) {
             NewChatView(
@@ -2847,6 +2839,137 @@ struct PreferencePickerView: View {
             }
             .navigationBarHidden(true)
         }
+    }
+}
+
+// MARK: - Menu Item View
+struct MenuItemView: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 50, height: 50)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                Text(title)
+                    .font(DesignSystem.Typography.titleSmall)
+                    .foregroundColor(DesignSystem.Colors.text)
+                
+                Text(subtitle)
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 16))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+    }
+}
+
+// MARK: - Menu View
+struct MenuView: View {
+    @Binding var path: NavigationPath
+    @State private var showLogoutAlert = false
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.xl) {
+                // Header
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    Text("Menu")
+                        .font(DesignSystem.Typography.titleLarge)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("PAAI Settings & Options")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, DesignSystem.Spacing.xxl)
+                
+                // Menu Items
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    // Hybrid Messaging
+                    NavigationLink(destination: HybridMessagingView()) {
+                        MenuItemView(
+                            icon: "network",
+                            title: "Hybrid Messaging",
+                            subtitle: "P2P + Layer 2 + Blockchain",
+                            color: .purple
+                        )
+                    }
+                    
+                    // Settings
+                    NavigationLink(destination: SettingsView(path: $path)) {
+                        MenuItemView(
+                            icon: "gearshape",
+                            title: "Settings",
+                            subtitle: "AI Status, Security & Preferences",
+                            color: .blue
+                        )
+                    }
+                    
+                    // Support & Help
+                    NavigationLink(destination: SupportView(path: $path)) {
+                        MenuItemView(
+                            icon: "questionmark.circle",
+                            title: "Support & Help",
+                            subtitle: "Get help and report issues",
+                            color: .green
+                        )
+                    }
+                    
+                    // Log Out
+                    Button(action: {
+                        showLogoutAlert = true
+                    }) {
+                        MenuItemView(
+                            icon: "rectangle.portrait.and.arrow.right",
+                            title: "Log Out",
+                            subtitle: "Sign out of your account",
+                            color: .red
+                        )
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                Spacer()
+            }
+        }
+        .alert("Log Out", isPresented: $showLogoutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Log Out", role: .destructive) {
+                logout()
+            }
+        } message: {
+            Text("Are you sure you want to log out?")
+        }
+    }
+    
+    private func logout() {
+        WalletService.shared.clear()
+        path = NavigationPath()
     }
 }
 
