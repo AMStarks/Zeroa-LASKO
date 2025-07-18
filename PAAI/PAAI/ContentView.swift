@@ -1086,7 +1086,7 @@ struct BottomNavigationView: View {
                 showHamburgerMenu = true
             }) {
                 VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 2 ? "line.3.horizontal.circle.fill" : "line.3.horizontal")
+                    Image(systemName: selectedTab == 2 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
                         .font(.system(size: 40, weight: .medium))
                     Text("Menu")
                         .font(DesignSystem.Typography.bodySmall)
