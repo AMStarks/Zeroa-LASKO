@@ -83,6 +83,7 @@ struct ContentView: View {
     @State private var showMessaging = false
     @State private var showHamburgerMenu = false
     @State private var selectedTab = 0
+    @State private var showSignInModal = false
     @StateObject private var themeManager = ThemeManager.shared
 
     private let walletService = WalletService.shared
@@ -105,24 +106,17 @@ struct ContentView: View {
                             .frame(height: 80)
                             .padding(.horizontal, DesignSystem.Spacing.lg)
                         
-                        Text("PAAI")
-                            .font(DesignSystem.Typography.titleLarge)
-                            .foregroundColor(DesignSystem.Colors.text)
-                        
-                        Text("Your AI Assistant")
-                            .font(DesignSystem.Typography.bodyMedium)
+                        Text("Your digital fingerprint")
+                            .font(.custom("AbadiMTProBold", size: 18))
                             .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
                     
                     Spacer()
                     
-                    // Login Form
+                    // Login Buttons
                     VStack(spacing: DesignSystem.Spacing.lg) {
-                        InputField("Enter Wallet Address", text: $address)
-                        InputField("Enter Mnemonic", text: $mnemonic, isSecure: true)
-                        
                         PrimaryButton("Sign In", isLoading: isCheckingLogin) {
-                            handleSignIn()
+                            showSignInModal = true
                         }
                         
                         SecondaryButton(title: "Create New Account") {
@@ -195,6 +189,16 @@ struct ContentView: View {
                 conversations: $conversations
             )
         }
+        .sheet(isPresented: $showSignInModal) {
+            SignInModalView(
+                address: $address,
+                mnemonic: $mnemonic,
+                isCheckingLogin: $isCheckingLogin,
+                showError: $showError,
+                errorMessage: $errorMessage,
+                path: $path
+            )
+        }
         .sheet(item: $currentConversation) { conversation in
             ChatView(
                 conversation: Binding(
@@ -253,16 +257,14 @@ struct ContentView: View {
 // MARK: - Create Account View
 struct CreateAccountView: View {
     @Binding var path: NavigationPath
-    @State private var address = ""
     @State private var mnemonic = ""
-    @State private var confirmMnemonic = ""
+    @State private var hasWrittenDown = false
+    @State private var showMnemonic = false
+    @State private var showConfirm = false
     @State private var isCreating = false
-    @State private var showError = false
-    @State private var errorMessage = ""
     @StateObject private var themeManager = ThemeManager.shared
-    
     private let walletService = WalletService.shared
-    
+
     var body: some View {
         ZStack {
             DesignSystem.Colors.background
@@ -270,35 +272,71 @@ struct CreateAccountView: View {
             
             VStack(spacing: DesignSystem.Spacing.xl) {
                 // Header
-                HStack {
-                    Button("Back") {
-                        path.removeLast()
-                    }
-                    .foregroundColor(DesignSystem.Colors.secondary)
-                    
-                    Spacer()
-                    
+                VStack(spacing: DesignSystem.Spacing.md) {
                     Text("Create Account")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Spacer()
+                    Text("Write down your recovery phrase")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
                 }
-                .padding(.horizontal, DesignSystem.Spacing.lg)
-                .padding(.top, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.xxl)
                 
                 Spacer()
                 
-                // Form
-                VStack(spacing: DesignSystem.Spacing.lg) {
-                    InputField("Enter Wallet Address", text: $address)
-                    InputField("Enter Mnemonic", text: $mnemonic, isSecure: true)
-                    InputField("Confirm Mnemonic", text: $confirmMnemonic, isSecure: true)
-                    
-                    PrimaryButton("Create Account", isLoading: isCreating) {
-                        createAccount()
+                // Mnemonic Display
+                CardView {
+                    VStack(spacing: DesignSystem.Spacing.md) {
+                        HStack {
+                            Text(showMnemonic ? mnemonic : String(repeating: "•", count: 32))
+                                .font(DesignSystem.Typography.bodyMedium)
+                                .foregroundColor(DesignSystem.Colors.text)
+                                .multilineTextAlignment(.leading)
+                            
+                            Spacer()
+                            
+                            VStack(spacing: DesignSystem.Spacing.sm) {
+                                Button(action: { showMnemonic.toggle() }) {
+                                    Image(systemName: showMnemonic ? "eye.slash" : "eye")
+                                        .foregroundColor(DesignSystem.Colors.secondary)
+                                        .font(.system(size: 20))
+                                }
+                                
+                                Button(action: {
+                                    UIPasteboard.general.string = mnemonic
+                                }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .foregroundColor(DesignSystem.Colors.secondary)
+                                        .font(.system(size: 20))
+                                }
+                            }
+                        }
+                        
+                        Text("Tap to show/hide • Copy to clipboard")
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
-                    .disabled(address.isEmpty || mnemonic.isEmpty || confirmMnemonic.isEmpty || mnemonic != confirmMnemonic)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                // Confirmation Toggle
+                Toggle("I have written this down securely", isOn: $hasWrittenDown)
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                
+                // Action Buttons
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    PrimaryButton("Create Account", isLoading: isCreating) {
+                        showConfirm = true
+                    }
+                    .disabled(!hasWrittenDown)
+                    
+                    SecondaryButton(title: "Back to Login") {
+                        path = NavigationPath()
+                    }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 
@@ -306,32 +344,114 @@ struct CreateAccountView: View {
             }
         }
         .navigationBarHidden(true)
-        .alert("Error", isPresented: $showError) {
-            Button("OK") { }
+        .alert("Confirm Account Creation", isPresented: $showConfirm) {
+            Button("Create Account") {
+                createAccount()
+            }
+            Button("Cancel", role: .cancel) { }
         } message: {
-            Text(errorMessage)
+            Text("Are you sure you want to create this account? Make sure you've written down your recovery phrase.")
+        }
+        .onAppear {
+            mnemonic = walletService.generateMnemonic()
         }
     }
     
     private func createAccount() {
-        guard !isCreating else { return }
         isCreating = true
-        
-        if mnemonic != confirmMnemonic {
-            errorMessage = "Mnemonics do not match"
-            showError = true
+        walletService.importMnemonic(mnemonic) { success, _ in
             isCreating = false
+            if success {
+                path = NavigationPath()
+            }
+        }
+    }
+}
+
+// MARK: - Sign In Modal View
+struct SignInModalView: View {
+    @Binding var address: String
+    @Binding var mnemonic: String
+    @Binding var isCheckingLogin: Bool
+    @Binding var showError: Bool
+    @Binding var errorMessage: String
+    @Binding var path: NavigationPath
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var themeManager = ThemeManager.shared
+    
+    private let walletService = WalletService.shared
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack(spacing: DesignSystem.Spacing.xl) {
+                    // Header
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Spacer()
+                        
+                        Text("Sign In")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    
+                    Spacer()
+                    
+                    // Form
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        InputField("Enter Wallet Address", text: $address)
+                        InputField("Enter Seed Phrase", text: $mnemonic, isSecure: true)
+                        
+                        PrimaryButton("Sign In", isLoading: isCheckingLogin) {
+                            handleSignIn()
+                        }
+                        .disabled(address.isEmpty || mnemonic.isEmpty)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarHidden(true)
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
+            }
+        }
+    }
+    
+    private func handleSignIn() {
+        guard !isCheckingLogin else { return }
+        isCheckingLogin = true
+        
+        if address.isEmpty || mnemonic.isEmpty {
+            errorMessage = "Both address and seed phrase are required"
+            showError = true
+            isCheckingLogin = false
             return
         }
         
         walletService.importMnemonic(mnemonic) { success, derivedAddress in
             if success, derivedAddress == address {
+                dismiss()
                 path.append("home")
             } else {
-                errorMessage = "Invalid address or mnemonic"
+                errorMessage = "Invalid address or seed phrase"
                 showError = true
             }
-            isCreating = false
+            isCheckingLogin = false
         }
     }
 }
