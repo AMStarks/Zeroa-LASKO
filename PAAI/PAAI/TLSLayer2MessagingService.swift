@@ -26,52 +26,87 @@ class TLSLayer2MessagingService: ObservableObject {
     
     // MARK: - P2P Network Setup
     private func setupP2PNetwork() {
+        // Check if we're in simulator (which has P2P limitations)
+        #if targetEnvironment(simulator)
+        DispatchQueue.main.async {
+            self.connectionStatus = "Simulator Mode - P2P Limited"
+            self.isConnected = false
+        }
+        return
+        #endif
+        
         // Create P2P listener for incoming connections
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = true
         
-        listener = try? NWListener(using: parameters)
-        listener?.service = NWListener.Service(name: "PAAI-Messaging", type: serviceType)
-        
-        listener?.stateUpdateHandler = { [weak self] state in
-            DispatchQueue.main.async {
-                switch state {
-                case .ready:
-                    self?.connectionStatus = "Connected"
-                    self?.isConnected = true
-                case .failed(let error):
-                    self?.connectionStatus = "Failed: \(error)"
-                    self?.isConnected = false
-                default:
-                    break
+        do {
+            listener = try NWListener(using: parameters)
+            listener?.service = NWListener.Service(name: "PAAI-Messaging", type: serviceType)
+            
+            listener?.stateUpdateHandler = { [weak self] state in
+                DispatchQueue.main.async {
+                    switch state {
+                    case .ready:
+                        self?.connectionStatus = "Connected"
+                        self?.isConnected = true
+                    case .failed(let error):
+                        print("❌ P2P Listener failed: \(error)")
+                        self?.connectionStatus = "Failed: \(error.localizedDescription)"
+                        self?.isConnected = false
+                    case .cancelled:
+                        self?.connectionStatus = "Disconnected"
+                        self?.isConnected = false
+                    default:
+                        break
+                    }
                 }
             }
+            
+            listener?.start(queue: .main)
+            
+            // Start browsing for other P2P peers
+            startPeerDiscovery()
+            
+        } catch {
+            print("❌ Failed to setup P2P listener: \(error)")
+            DispatchQueue.main.async {
+                self.connectionStatus = "Setup Failed: \(error.localizedDescription)"
+                self.isConnected = false
+            }
         }
-        
-        listener?.start(queue: .main)
-        
-        // Start browsing for other P2P peers
-        startPeerDiscovery()
     }
     
     private func startPeerDiscovery() {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
         
-        browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: parameters)
-        browser?.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                self?.handleDiscoveredPeers()
-            default:
-                break
+        do {
+            browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: parameters)
+            browser?.stateUpdateHandler = { [weak self] state in
+                DispatchQueue.main.async {
+                    switch state {
+                    case .ready:
+                        self?.handleDiscoveredPeers()
+                    case .failed(let error):
+                        print("❌ P2P Browser failed: \(error)")
+                        self?.connectionStatus = "Discovery Failed: \(error.localizedDescription)"
+                    default:
+                        break
+                    }
+                }
+            }
+            browser?.start(queue: .main)
+        } catch {
+            print("❌ Failed to start peer discovery: \(error)")
+            DispatchQueue.main.async {
+                self.connectionStatus = "Discovery Failed: \(error.localizedDescription)"
             }
         }
-        browser?.start(queue: .main)
     }
     
     private func handleDiscoveredPeers() {
         browser?.browseResultsChangedHandler = { [weak self] results, _ in
+            print("🔍 Discovered \(results.count) P2P peers")
             for result in results {
                 self?.connectToPeer(result.endpoint)
             }
@@ -82,11 +117,18 @@ class TLSLayer2MessagingService: ObservableObject {
         let connection = NWConnection(to: endpoint, using: .tcp)
         
         connection.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                self?.handleP2PConnection(connection)
-            default:
-                break
+            DispatchQueue.main.async {
+                switch state {
+                case .ready:
+                    print("✅ P2P connection established")
+                    self?.handleP2PConnection(connection)
+                case .failed(let error):
+                    print("❌ P2P connection failed: \(error)")
+                case .cancelled:
+                    print("🔌 P2P connection cancelled")
+                default:
+                    break
+                }
             }
         }
         
@@ -96,6 +138,11 @@ class TLSLayer2MessagingService: ObservableObject {
     // MARK: - P2P Message Handling
     private func handleP2PConnection(_ connection: NWConnection) {
         connection.receiveMessage { [weak self] content, context, isComplete, error in
+            if let error = error {
+                print("❌ P2P receive error: \(error)")
+                return
+            }
+            
             guard let content = content else { return }
             
             if let message = try? JSONDecoder().decode(P2PMessage.self, from: content) {
@@ -164,6 +211,9 @@ class TLSLayer2MessagingService: ObservableObject {
         
         return await withCheckedContinuation { continuation in
             connection.send(content: messageData) { error in
+                if let error = error {
+                    print("❌ P2P send error: \(error)")
+                }
                 continuation.resume(returning: error == nil)
             }
         }

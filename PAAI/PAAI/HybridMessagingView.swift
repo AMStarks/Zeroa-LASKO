@@ -10,12 +10,30 @@ struct HybridMessagingView: View {
     @State private var newContactName = ""
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
             VStack(spacing: 0) {
-                // Header
+                // Header with Back Button
                 HStack {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        HStack(spacing: DesignSystem.Spacing.xs) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(DesignSystem.Typography.bodyMedium)
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    }
+                    
+                    Spacer()
+                    
                     Text("P2P Messaging")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
@@ -154,45 +172,55 @@ struct ConversationsTabView: View {
     let onSendMessage: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            if conversations.isEmpty {
-                // Empty State
-                VStack(spacing: DesignSystem.Spacing.lg) {
-                    Image(systemName: "message.circle")
-                        .font(.system(size: 60))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                    
-                    Text("No Conversations")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Text("Add contacts and start messaging to see conversations here")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(DesignSystem.Spacing.xl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // Conversations List
-                List(conversations) { conversation in
-                    ConversationRowView(conversation: conversation)
-                        .onTapGesture {
-                            // Select this conversation
-                            if let contact = getContact(for: conversation.participantAddress) {
-                                selectedContact = contact
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                if conversations.isEmpty {
+                    // Empty State
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        Image(systemName: "message.circle")
+                            .font(.system(size: 60))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        
+                        Text("No Conversations")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Text("Add contacts and start messaging to see conversations here")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(DesignSystem.Spacing.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Conversations List
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                            ForEach(conversations) { conversation in
+                                ConversationRowView(conversation: conversation)
+                                    .onTapGesture {
+                                        // Select this conversation
+                                        if let contact = getContact(for: conversation.participantAddress) {
+                                            selectedContact = contact
+                                        }
+                                    }
                             }
                         }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        .padding(.vertical, DesignSystem.Spacing.md)
+                    }
                 }
-                .listStyle(PlainListStyle())
-            }
-            
-            // Message Input (if contact selected)
-            if selectedContact != nil {
-                MessageInputView(
-                    messageText: $messageText,
-                    onSend: onSendMessage
-                )
+                
+                // Message Input (if contact selected)
+                if selectedContact != nil {
+                    MessageInputView(
+                        messageText: $messageText,
+                        onSend: onSendMessage
+                    )
+                }
             }
         }
     }
@@ -248,7 +276,9 @@ struct ConversationRowView: View {
                     .clipShape(Capsule())
             }
         }
-        .padding(.vertical, DesignSystem.Spacing.sm)
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
     }
     
     private func formatTime(_ date: Date) -> String {
@@ -269,38 +299,48 @@ struct ContactsTabView: View {
     let onAddContact: () -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            if contacts.isEmpty {
-                // Empty State
-                VStack(spacing: DesignSystem.Spacing.lg) {
-                    Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 60))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                    
-                    Text("No Contacts")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Text("Add contacts to start P2P messaging")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
-                    
-                    PrimaryButton("Add Contact") {
-                        showAddContact = true
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                if contacts.isEmpty {
+                    // Empty State
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .font(.system(size: 60))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        
+                        Text("No Contacts")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Text("Add contacts to start P2P messaging")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                        
+                        PrimaryButton("Add Contact") {
+                            showAddContact = true
+                        }
+                    }
+                    .padding(DesignSystem.Spacing.xl)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // Contacts List
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                            ForEach(contacts) { contact in
+                                ContactRowView(contact: contact)
+                                    .onTapGesture {
+                                        selectedContact = contact
+                                    }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        .padding(.vertical, DesignSystem.Spacing.md)
                     }
                 }
-                .padding(DesignSystem.Spacing.xl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                // Contacts List
-                List(contacts) { contact in
-                    ContactRowView(contact: contact)
-                        .onTapGesture {
-                            selectedContact = contact
-                        }
-                }
-                .listStyle(PlainListStyle())
             }
         }
     }
@@ -341,7 +381,9 @@ struct ContactRowView: View {
                 .font(.system(size: 14))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
         }
-        .padding(.vertical, DesignSystem.Spacing.sm)
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.Colors.surface)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
     }
 }
 
@@ -354,6 +396,7 @@ struct MessageInputView: View {
         HStack(spacing: DesignSystem.Spacing.md) {
             TextField("Type a message...", text: $messageText)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
+                .font(DesignSystem.Typography.bodyMedium)
                 .onSubmit {
                     onSend()
                 }
@@ -382,41 +425,60 @@ struct AddContactView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
             VStack(spacing: DesignSystem.Spacing.lg) {
-                VStack(spacing: DesignSystem.Spacing.md) {
+                // Header
+                HStack {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(DesignSystem.Colors.secondary)
+                    
+                    Spacer()
+                    
                     Text("Add Contact")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Text("Enter the TLS address and name of the contact you want to add")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
+                    Spacer()
+                    
+                    Button("Add") {
+                        onAdd()
+                        dismiss()
+                    }
+                    .foregroundColor(DesignSystem.Colors.secondary)
+                    .disabled(address.isEmpty || name.isEmpty)
                 }
-                .padding(.top, DesignSystem.Spacing.xl)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
                 
                 VStack(spacing: DesignSystem.Spacing.lg) {
-                    InputField("TLS Address", text: $address)
-                    InputField("Contact Name", text: $name)
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                        Text("TLS Address")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        TextField("Enter TLS wallet address", text: $address)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(DesignSystem.Typography.bodyMedium)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                        Text("Contact Name")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        TextField("Enter contact name", text: $name)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .font(DesignSystem.Typography.bodyMedium)
+                    }
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 
                 Spacer()
-                
-                VStack(spacing: DesignSystem.Spacing.md) {
-                    PrimaryButton("Add Contact") {
-                        onAdd()
-                        dismiss()
-                    }
-                    .disabled(address.isEmpty || name.isEmpty)
-                    
-                    SecondaryButton(title: "Cancel") {
-                        dismiss()
-                    }
-                }
-                .padding(.horizontal, DesignSystem.Spacing.lg)
-                .padding(.bottom, DesignSystem.Spacing.lg)
             }
         }
         .navigationBarHidden(true)
@@ -428,86 +490,91 @@ struct P2PSettingsView: View {
     @ObservedObject var p2pService: TLSLayer2MessagingService
     
     var body: some View {
-        VStack(spacing: DesignSystem.Spacing.lg) {
-            // Connection Status
-            CardView {
-                VStack(spacing: DesignSystem.Spacing.md) {
-                    HStack {
-                        Text("Connection Status")
-                            .font(DesignSystem.Typography.bodyMedium)
-                            .fontWeight(.semibold)
-                            .foregroundColor(DesignSystem.Colors.text)
-                        
-                        Spacer()
-                        
-                        HStack(spacing: DesignSystem.Spacing.sm) {
-                            Circle()
-                                .fill(p2pService.isConnected ? Color.green : Color.red)
-                                .frame(width: 8, height: 8)
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    // Connection Status
+                    CardView {
+                        VStack(spacing: DesignSystem.Spacing.md) {
+                            HStack {
+                                Text("Connection Status")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                Spacer()
+                                
+                                HStack(spacing: DesignSystem.Spacing.sm) {
+                                    Circle()
+                                        .fill(p2pService.isConnected ? Color.green : Color.red)
+                                        .frame(width: 8, height: 8)
+                                    
+                                    Text(p2pService.connectionStatus)
+                                        .font(DesignSystem.Typography.bodySmall)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                }
+                            }
                             
-                            Text(p2pService.connectionStatus)
-                                .font(DesignSystem.Typography.bodySmall)
-                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                            if p2pService.isConnected {
+                                Text("✅ P2P network active - Messages will be sent instantly")
+                                    .font(DesignSystem.Typography.bodySmall)
+                                    .foregroundColor(.green)
+                            } else {
+                                Text("⚠️ P2P network unavailable - Messages will use blockchain fallback")
+                                    .font(DesignSystem.Typography.bodySmall)
+                                    .foregroundColor(.orange)
+                            }
                         }
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
                     
-                    if p2pService.isConnected {
-                        Text("✅ P2P network active - Messages will be sent instantly")
-                            .font(DesignSystem.Typography.bodySmall)
-                            .foregroundColor(.green)
-                    } else {
-                        Text("⚠️ P2P network unavailable - Messages will use blockchain fallback")
-                            .font(DesignSystem.Typography.bodySmall)
-                            .foregroundColor(.orange)
+                    // Security Info
+                    CardView {
+                        VStack(spacing: DesignSystem.Spacing.md) {
+                            HStack {
+                                Text("Security Features")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                Spacer()
+                            }
+                            
+                            VStack(spacing: DesignSystem.Spacing.sm) {
+                                SecurityFeatureRow(
+                                    icon: "lock.shield",
+                                    title: "End-to-End Encryption",
+                                    description: "Messages encrypted with recipient's public key"
+                                )
+                                
+                                SecurityFeatureRow(
+                                    icon: "signature",
+                                    title: "Digital Signatures",
+                                    description: "All messages signed with sender's private key"
+                                )
+                                
+                                SecurityFeatureRow(
+                                    icon: "network",
+                                    title: "P2P Network",
+                                    description: "Direct peer-to-peer connections, no central servers"
+                                )
+                                
+                                SecurityFeatureRow(
+                                    icon: "blockchain",
+                                    title: "Blockchain Identity",
+                                    description: "Contact verification through TLS blockchain"
+                                )
+                            }
+                        }
                     }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
+                .padding(.top, DesignSystem.Spacing.lg)
             }
-            .padding(.horizontal, DesignSystem.Spacing.lg)
-            
-            // Security Info
-            CardView {
-                VStack(spacing: DesignSystem.Spacing.md) {
-                    HStack {
-                        Text("Security Features")
-                            .font(DesignSystem.Typography.bodyMedium)
-                            .fontWeight(.semibold)
-                            .foregroundColor(DesignSystem.Colors.text)
-                        
-                        Spacer()
-                    }
-                    
-                    VStack(spacing: DesignSystem.Spacing.sm) {
-                        SecurityFeatureRow(
-                            icon: "lock.shield",
-                            title: "End-to-End Encryption",
-                            description: "Messages encrypted with recipient's public key"
-                        )
-                        
-                        SecurityFeatureRow(
-                            icon: "signature",
-                            title: "Digital Signatures",
-                            description: "All messages signed with sender's private key"
-                        )
-                        
-                        SecurityFeatureRow(
-                            icon: "network",
-                            title: "P2P Network",
-                            description: "Direct peer-to-peer connections, no central servers"
-                        )
-                        
-                        SecurityFeatureRow(
-                            icon: "blockchain",
-                            title: "Blockchain Identity",
-                            description: "Contact verification through TLS blockchain"
-                        )
-                    }
-                }
-            }
-            .padding(.horizontal, DesignSystem.Spacing.lg)
-            
-            Spacer()
         }
-        .padding(.top, DesignSystem.Spacing.lg)
     }
 }
 
