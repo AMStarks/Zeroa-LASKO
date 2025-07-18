@@ -3,7 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>This app needs calendar access to add meetings.</string>
+	<string>This app needs calendar access to add meetings and schedule events.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>This app uses speech recognition to understand voice commands and provide hands-free interaction.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access for voice commands and speech recognition.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>abadi-mt-pro-bold.ttf</string>

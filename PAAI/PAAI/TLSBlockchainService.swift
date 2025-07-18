@@ -91,7 +91,7 @@ class TLSBlockchainService: ObservableObject {
         // For now, we'll simulate the payment since we need the actual TLS wallet integration
         // In a real implementation, this would use the TLS wallet to sign and broadcast the transaction
         
-        let paymentRequest = TLSPaymentRequest(
+        _ = TLSPaymentRequest(
             fromAddress: fromAddress,
             toAddress: toAddress,
             amount: amount,

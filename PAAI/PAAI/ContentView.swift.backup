@@ -1,0 +1,2400 @@
+import SwiftUI
+import EventKit
+import MapKit
+import Combine
+
+// MARK: - Models
+struct Message: Identifiable, Codable {
+    let id: String
+    let contact: String
+    let content: String
+    let timestamp: String
+    let viewed: Bool
+    let priority: Int
+}
+
+struct BlockchainStats: Codable {
+    let chain: String
+    let blockHeight: Int
+    let lastBlockHash: String
+    let networkHashrate: Double
+
+    enum CodingKeys: String, CodingKey {
+        case chain
+        case blockHeight = "block_height"
+        case lastBlockHash = "last_block_hash"
+        case networkHashrate = "network_hashrate"
+    }
+}
+
+struct CoinGeckoPrice: Codable {
+    let telestai: TLSPriceData
+}
+
+struct TLSPriceData: Codable {
+    let usd: Double
+    let usd_24h_change: Double
+    let last_updated_at: Int?
+}
+
+struct SessionInfo: Identifiable {
+    let id = UUID()
+    let deviceName: String
+    let location: String
+    let lastActive: Date
+    let isCurrent: Bool
+}
+
+struct AnalyticsData {
+    let totalTransactions: Int
+    let totalVolume: Double
+    let averageTransactionSize: Double
+    let mostUsedFeatures: [String: Int]
+    let dailyActiveMinutes: Int
+    let weeklyUsage: [String: Int]
+}
+
+// MARK: - Main Content View
+struct ContentView: View {
+    @State private var address = ""
+    @State private var mnemonic = ""
+    @State private var isCheckingLogin = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+    @State private var path = NavigationPath()
+    @StateObject private var assistantService = AssistantService.shared
+    @StateObject private var tlsService = TLSBlockchainService.shared
+    @StateObject private var messagingService = MessagingService.shared
+    
+    // Messaging state variables
+    @State private var conversations: [ChatConversation] = []
+    @State private var currentConversation: ChatConversation?
+    @State private var messageText = ""
+    @State private var showNewChat = false
+    @State private var newContactName = ""
+    @State private var newContactAddress = ""
+    
+    // Sheet state variables
+    @State private var showSubscriptionAlert = false
+    @State private var showSendSheet = false
+    @State private var showReceiveSheet = false
+    @State private var showTransactionsSheet = false
+    @State private var showMessaging = false
+    @State private var showHamburgerMenu = false
+    @State private var selectedTab = 0
+
+    private let walletService = WalletService.shared
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            ZStack {
+                // Background
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack(spacing: DesignSystem.Spacing.xl) {
+                Spacer()
+                    
+                    // Logo and Branding
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        Image("ZeroaBanner")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(height: 80)
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        Text("PAAI")
+                            .font(DesignSystem.Typography.titleLarge)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Text("Your AI Assistant")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Login Form
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        InputField("Enter Wallet Address", text: $address)
+                        InputField("Enter Mnemonic", text: $mnemonic, isSecure: true)
+                        
+                        PrimaryButton("Sign In", isLoading: isCheckingLogin) {
+                            handleSignIn()
+                        }
+                        
+                        SecondaryButton(title: "Create New Account") {
+                            path.append("create")
+                        }
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    
+                Spacer()
+                }
+            }
+            .navigationTitle("")
+            .navigationBarHidden(true)
+            .alert("Error", isPresented: $showError) {
+                Button("OK") { }
+            } message: {
+                Text(errorMessage)
+            }
+            .navigationDestination(for: String.self) { value in
+                switch value {
+                case "home":
+                    HomeView(path: $path, assistantService: assistantService, tlsService: tlsService)
+                case "create":
+                    CreateAccountView(path: $path)
+                case "prioritization":
+                    PrioritizationView(messages: [], path: $path)
+                case "stats":
+                    StatsView(path: $path)
+                case "userPortal":
+                    UserPortalView(path: $path)
+                case "profile":
+                    ProfileView(path: $path)
+                case "messaging":
+                    ConversationsListView(
+                        conversations: $conversations,
+                        currentConversation: $currentConversation,
+                        showNewChat: $showNewChat
+                    )
+                default:
+                    EmptyView()
+                }
+            }
+            .onAppear {
+                checkAutoLogin()
+            }
+        }
+        .sheet(isPresented: $showSubscriptionAlert) {
+            SubscriptionView(path: $path)
+        }
+        .sheet(isPresented: $showSendSheet) {
+            SendView()
+        }
+        .sheet(isPresented: $showReceiveSheet) {
+            ReceiveView()
+        }
+        .sheet(isPresented: $showTransactionsSheet) {
+            TransactionsView()
+        }
+        .sheet(isPresented: $showMessaging) {
+            ConversationsListView(
+                conversations: $conversations,
+                currentConversation: $currentConversation,
+                showNewChat: $showNewChat
+            )
+        }
+        .sheet(isPresented: $showNewChat) {
+            NewChatView(
+                newContactName: $newContactName,
+                newContactAddress: $newContactAddress,
+                conversations: $conversations
+            )
+        }
+        .sheet(item: $currentConversation) { conversation in
+            ChatView(
+                conversation: Binding(
+                    get: { conversation },
+                    set: { newValue in
+                        if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+                            conversations[index] = newValue
+                        }
+                    }
+                ),
+                messageText: $messageText
+            )
+        }
+    }
+
+    private func handleSignIn() {
+        guard !isCheckingLogin else { return }
+        isCheckingLogin = true
+        
+        if address.isEmpty || mnemonic.isEmpty {
+            errorMessage = "Both address and mnemonic are required"
+            showError = true
+            isCheckingLogin = false
+            return
+        }
+        
+        walletService.importMnemonic(mnemonic) { success, derivedAddress in
+            if success, derivedAddress == address {
+                path.append("home")
+            } else {
+                errorMessage = "Invalid address or mnemonic"
+                showError = true
+            }
+            isCheckingLogin = false
+        }
+    }
+
+    private func checkAutoLogin() {
+        guard !isCheckingLogin else { return }
+        isCheckingLogin = true
+        
+        if let savedAddress = walletService.loadAddress(),
+           let savedMnemonic = walletService.keychain.read(key: "wallet_mnemonic") {
+            walletService.importMnemonic(savedMnemonic) { success, derivedAddress in
+                if success, derivedAddress == savedAddress {
+                    path.append("home")
+                }
+                isCheckingLogin = false
+            }
+        } else {
+            isCheckingLogin = false
+        }
+    }
+}
+
+// MARK: - Create Account View
+struct CreateAccountView: View {
+    @Binding var path: NavigationPath
+    
+    var body: some View {
+        VStack {
+            Text("Create Account")
+                .font(DesignSystem.Typography.titleLarge)
+            // Add account creation
+        }
+    }
+}
+
+// MARK: - Home View
+struct HomeView: View {
+    @Binding var path: NavigationPath
+    @ObservedObject var assistantService: AssistantService
+    @ObservedObject var tlsService: TLSBlockchainService
+    @State private var commandInput = ""
+    @State private var isSubscribed = false
+    @State private var isInitializing = false
+    @State private var showSubscriptionAlert = false
+    @State private var showLogoutAlert = false
+    @State private var chain: String?
+    @State private var blockHeight: Int?
+    @State private var lastBlockHash: String?
+    @State private var networkHashrate: Double?
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var prioritizedMessages: [ChatMessage] = []
+    @State private var tlsBalance: Double = 0.0
+    @State private var tlsPrice: Double = 0.0
+    @State private var tlsPriceChange: Double = 0.0
+    @State private var isLoadingPrice = false
+    @State private var priceHistory: [Double] = []
+    @State private var isLoadingHistory = false
+    
+    // Personal Information
+    @State private var profilePicture: UIImage?
+    @State private var displayName = "PAAI User"
+    @State private var userBio = ""
+    @State private var userLocation = ""
+    @State private var socialLinks: [String: String] = [:]
+    
+    // Security & Session
+    @State private var biometricEnabled = true
+    @State private var activeSessions: [SessionInfo] = []
+    @State private var showSessionManagement = false
+    
+    // Preferences
+    @State private var selectedLanguage = "English"
+    @State private var selectedCurrency = "USD"
+    @State private var selectedTheme = "Auto"
+    @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
+    @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
+    @State private var availableThemes = ["Auto", "Light", "Dark"]
+    
+    // Analytics
+    @State private var showAnalytics = false
+    @State private var analyticsData: AnalyticsData?
+    
+    // Bug Reporting
+    @State private var showBugReport = false
+    @State private var bugDescription = ""
+    @State private var bugCategory = "General"
+    @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
+    
+    // Transaction Actions
+    @State private var showSendSheet = false
+    @State private var showReceiveSheet = false
+    @State private var showTransactionsSheet = false
+    
+    // Bottom Navigation
+    @State private var selectedTab = 0
+    @State private var showMessaging = false
+    @State private var showHamburgerMenu = false
+    
+    // BitChat Messaging
+    @State private var conversations: [ChatConversation] = []
+    @State private var currentConversation: ChatConversation?
+    @State private var messageText = ""
+    @State private var showNewChat = false
+    @State private var newContactName = ""
+    @State private var newContactAddress = ""
+    
+    private let walletService = WalletService.shared
+    private let networkService = NetworkService.shared
+
+    var body: some View {
+            ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header
+                HStack {
+                    // Hamburger Menu (Top Left)
+                    Menu {
+                        Button("Sign Message") {
+                            commandInput = "sign message Hello"
+                            handleCommand()
+                        }
+                        Button("Prioritize Messages") {
+                            commandInput = "prioritize messages"
+                            handleCommand()
+                        }
+                        Button("Blockchain Stats") {
+                            commandInput = "tell main stats"
+                            handleCommand()
+                            }
+                        Button("Logout", role: .destructive) {
+                            showLogoutAlert = true
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                        Spacer()
+                    
+                    // Messaging Button (Top Right)
+                    Button(action: {
+                        path.append("messaging")
+                    }) {
+                        Image(systemName: "message.circle.fill")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 24))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    // Profile Button (Top Right)
+                    Button(action: {
+                        path.append("profile")
+                    }) {
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 24))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                if isInitializing {
+                    LoadingView(message: "Initializing...")
+                } else if !isSubscribed {
+                    subscriptionView
+                } else {
+                    mainContentView
+                }
+                
+                            Spacer()
+                        }
+        }
+        .navigationBarHidden(true)
+        .alert("Success", isPresented: $showAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
+        }
+        .alert("Logout", isPresented: $showLogoutAlert) {
+            Button("Logout", role: .destructive) {
+                logout()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to logout?")
+        }
+        .onAppear {
+            initialize()
+                            }
+    }
+    
+    private var subscriptionView: some View {
+        VStack(spacing: DesignSystem.Spacing.xl) {
+                        Spacer()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 60))
+                    .foregroundColor(DesignSystem.Colors.secondary)
+                
+                Text("Subscription Required")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                
+                Text("To access AI services, please complete your subscription payment.")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    PrimaryButton("Pay with TLS", isLoading: false) {
+                        Task {
+                            await processSubscription()
+                        }
+                    }
+                    
+                    Text("10 TLS / month")
+                        .font(DesignSystem.Typography.bodySmall)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+            .padding(DesignSystem.Spacing.xl)
+            
+                    Spacer()
+                }
+            }
+    
+    private var mainContentView: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // TLS Balance Section (Top Half)
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    // TLS Balance Card
+                    CardView {
+                        VStack(spacing: DesignSystem.Spacing.md) {
+                            HStack {
+                                Text("TLS Balance")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                Spacer()
+                                if isLoadingPrice {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                }
+                            }
+                            
+                            VStack(spacing: DesignSystem.Spacing.md) {
+                                // Centered Balance Display
+                                VStack(spacing: DesignSystem.Spacing.xs) {
+                                    Text("\(Int(ceil(tlsBalance))) TLS")
+                                        .font(DesignSystem.Typography.titleMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                        .multilineTextAlignment(.center)
+                                    
+                                    if tlsPrice > 0 {
+                                        Text("$\(String(format: "%.2f", tlsBalance * tlsPrice))")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                }
+                                
+                                // 7-Day Price Chart
+                                VStack(spacing: DesignSystem.Spacing.xs) {
+                                    Text("7-Day Price Trend")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    
+                                    if isLoadingHistory {
+                                        ProgressView()
+                                            .scaleEffect(0.6)
+                                    } else {
+                                        LineChartView(data: priceHistory, width: 280, height: 60)
+                                            .background(Color.clear)
+                                    }
+                                }
+                            }
+                            
+                            if tlsPriceChange != 0 {
+                                HStack {
+                                    Image(systemName: tlsPriceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                        .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
+                                    Text("\(String(format: "%.2f", abs(tlsPriceChange)))%")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
+                                    Spacer()
+                        }
+                            }
+                            // Price Chart
+                            if !priceHistory.isEmpty {
+                                LineChartView(data: priceHistory, width:280, height: 60)
+                                    .frame(width: 280, height: 60)
+                            }
+                            
+                            // Transaction Action Buttons
+                            HStack(spacing: DesignSystem.Spacing.md) {
+                                // Send Button
+                                Button(action: {
+                                    showSendSheet = true
+                                }) {
+                                    VStack(spacing: DesignSystem.Spacing.xs) {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(DesignSystem.Colors.primary)
+                                        Text("Send")
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.background)
+                                    .cornerRadius(DesignSystem.CornerRadius.medium)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                            .stroke(DesignSystem.Colors.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                // Receive Button
+                                Button(action: {
+                                    showReceiveSheet = true
+                                }) {
+                                    VStack(spacing: DesignSystem.Spacing.xs) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                        Text("Receive")
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.background)
+                                    .cornerRadius(DesignSystem.CornerRadius.medium)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                            .stroke(DesignSystem.Colors.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                
+                                // Transactions Button
+                                Button(action: {
+                                    showTransactionsSheet = true
+                                }) {
+                                    VStack(spacing: DesignSystem.Spacing.xs) {
+                                        Image(systemName: "list.bullet.circle.fill")
+                                            .font(.system(size: 24))
+                                            .foregroundColor(DesignSystem.Colors.primary)
+                                        Text("History")
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.background)
+                                    .cornerRadius(DesignSystem.CornerRadius.medium)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                            .stroke(DesignSystem.Colors.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.sm)
+                        }
+                        .padding(DesignSystem.Spacing.lg)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                Spacer()
+                
+                // Centered AI Chat Interface
+                VStack(spacing: DesignSystem.Spacing.xl) {
+                    // Command Input
+                    VStack(spacing: DesignSystem.Spacing.md) {
+                        HStack(spacing: DesignSystem.Spacing.sm) {
+                            InputField("How may I help you?", text: $commandInput)
+                                .frame(maxWidth: .infinity)
+                                .onSubmit {
+                            handleCommand()
+                        }
+                            
+                            Button(action: {
+                                handleCommand()
+                            }) {
+                                Image(systemName: "paperplane.fill")
+                            .foregroundColor(.white)
+                                    .font(.system(size: 18))
+                                    .frame(width: 44, height: 44)
+                                    .background(DesignSystem.Colors.secondary)
+                            .clipShape(Circle())
+                    }
+                }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
+                
+                Spacer()
+                
+                // ZeroaFinger at bottom (above navigation)
+                VStack {
+                    Spacer()
+                    Image("ZeroaFinger")
+                            .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 94, height: 94) // 25% larger (was 75x75)
+                        .padding(.bottom, 20) // Reduced padding to make room for navigation
+                }
+                
+                // Bottom Navigation
+                BottomNavigationView(
+                    selectedTab: $selectedTab,
+                    showMessaging: $showMessaging,
+                    showHamburgerMenu: $showHamburgerMenu
+                )
+            }
+        }
+    }
+
+    private func initialize() {
+        guard !isInitializing else { return }
+        isInitializing = true
+        
+        walletService.initialize {
+            isSubscribed = walletService.checkSubscription()
+            fetchBlockchainInfo()
+            loadAndPrioritizeMessages()
+            Task {
+                await tlsService.refreshBalance()
+                await fetchTLSPrice()
+                await loadTLSBalance()
+                await fetchTLSPriceHistory() // Added this line
+            }
+            isInitializing = false
+        }
+    }
+    
+    private func fetchTLSPrice() async {
+        isLoadingPrice = true
+        
+        guard let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=telestai&vs_currencies=usd&include_24hr_change=true") else {
+            await MainActor.run {
+                isLoadingPrice = false
+            }
+            return
+        }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let priceData = try JSONDecoder().decode(CoinGeckoPrice.self, from: data)
+            
+            await MainActor.run {
+                self.tlsPrice = priceData.telestai.usd
+                self.tlsPriceChange = priceData.telestai.usd_24h_change
+                self.isLoadingPrice = false
+            }
+        } catch {
+            print("Failed to fetch TLS price: \(error)")
+            await MainActor.run {
+                self.isLoadingPrice = false
+            }
+        }
+    }
+    
+    private func loadTLSBalance() async {
+        await tlsService.refreshBalance()
+        await MainActor.run {
+            self.tlsBalance = tlsService.currentBalance
+        }
+    }
+    
+    private func processSubscription() async {
+        let success = await tlsService.processSubscriptionPayment()
+        await MainActor.run {
+            if success {
+                isSubscribed = true
+                alertMessage = "Subscription activated successfully!"
+                showAlert = true
+            } else {
+                alertMessage = "Payment failed. Please try again."
+                showAlert = true
+            }
+        }
+    }
+    
+    private func logout() {
+        walletService.clear()
+        path = NavigationPath()
+    }
+
+    private func fetchBlockchainInfo() {
+        guard let statsURL = URL(string: "https://telestai.cryptoscope.io/api/stats/") else {
+            DispatchQueue.main.async {
+                self.chain = "Main"
+                self.blockHeight = 123456
+                self.lastBlockHash = "abc123..."
+                self.networkHashrate = 100.50
+            }
+            return
+        }
+        
+        URLSession.shared.dataTask(with: statsURL) { data, response, error in
+            if let error = error {
+                print("Stats fetch error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.chain = "Main"
+                    self.blockHeight = 123456
+                    self.lastBlockHash = "abc123..."
+                    self.networkHashrate = 100.50
+                }
+                return
+            }
+            
+            guard let data = data,
+                  let stats = try? JSONDecoder().decode(BlockchainStats.self, from: data) else {
+                DispatchQueue.main.async {
+                    self.chain = "Main"
+                    self.blockHeight = 123456
+                    self.lastBlockHash = "abc123..."
+                    self.networkHashrate = 100.50
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                self.chain = stats.chain
+                self.blockHeight = stats.blockHeight
+                self.lastBlockHash = stats.lastBlockHash
+                self.networkHashrate = stats.networkHashrate / 1e9
+            }
+        }.resume()
+    }
+
+    private func loadAndPrioritizeMessages() {
+        let newMessages: [ChatMessage] = [
+            ChatMessage(
+                id: UUID().uuidString,
+                senderAddress: "John",
+                receiverAddress: "me",
+                content: "Meeting at 3 PM",
+                timestamp: Date(),
+                messageType: .text,
+                isEncrypted: false,
+                signature: nil,
+                status: .delivered
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                senderAddress: "Boss",
+                receiverAddress: "me",
+                content: "URGENT: Review report",
+                timestamp: Date(),
+                messageType: .text,
+                isEncrypted: false,
+                signature: nil,
+                status: .delivered
+            ),
+            ChatMessage(
+                id: UUID().uuidString,
+                senderAddress: "Mom",
+                receiverAddress: "me",
+                content: "Call me back",
+                timestamp: Date(),
+                messageType: .text,
+                isEncrypted: false,
+                signature: nil,
+                status: .delivered
+            )
+        ]
+        var contactRanks = ["John": 5, "Boss": 10, "Mom": 3]
+        if let ranksData = walletService.keychain.read(key: "contact_ranks"),
+           let ranks = try? JSONSerialization.jsonObject(with: Data(ranksData.utf8)) as? [String: Int] {
+            contactRanks = ranks
+        } else {
+            if let ranksData = try? JSONSerialization.data(withJSONObject: contactRanks) {
+                _ = walletService.keychain.save(key: "contact_ranks", value: String(data: ranksData, encoding: .utf8)!)
+            }
+        }
+        prioritizedMessages = newMessages.map { msg in
+            let baseRank = contactRanks[msg.senderAddress] ?? 1
+            let urgencyRank = msg.content.lowercased().contains("urgent") ? 20 : 0
+            // Attach priority as a tuple for sorting, or use a local struct if needed
+            return (msg: msg, priority: baseRank + urgencyRank)
+        }
+        .sorted { $0.priority > $1.priority }
+        .map { $0.msg }
+        // Optionally, save to keychain as before (if needed)
+    }
+
+    private func extractJSONFromResponse(_ response: String) -> String {
+        // First, try to find a complete JSON object by counting braces
+        var braceCount = 0
+        var jsonStart: String.Index?
+        var jsonEnd: String.Index?
+        
+        for (index, char) in response.enumerated() {
+            let stringIndex = response.index(response.startIndex, offsetBy: index)
+            
+            if char == "{" {
+                if braceCount == 0 {
+                    jsonStart = stringIndex
+                }
+                braceCount += 1
+            } else if char == "}" {
+                braceCount -= 1
+                if braceCount == 0 {
+                    jsonEnd = stringIndex
+                    break
+                }
+            }
+        }
+        
+        if let start = jsonStart, let end = jsonEnd {
+            let jsonString = String(response[start...end])
+            print("🔍 Extracted JSON: \(jsonString)")
+            return jsonString
+        }
+        
+        // Fallback: try the old method
+        if let startIndex = response.range(of: "{"),
+           let endIndex = response.range(of: "}", options: .backwards) {
+            let jsonStart = startIndex.lowerBound
+            let jsonEnd = endIndex.upperBound
+            let jsonString = String(response[jsonStart..<jsonEnd])
+            
+            // Validate that this is actually a complete JSON object
+            if jsonString.hasPrefix("{") && jsonString.hasSuffix("}") {
+                let openBraces = jsonString.filter { $0 == "{" }.count
+                let closeBraces = jsonString.filter { $0 == "}" }.count
+                
+                if openBraces == closeBraces {
+                    print("🔍 Extracted JSON (fallback): \(jsonString)")
+                    return jsonString
+                }
+            }
+        }
+        
+        // If we can't extract valid JSON, return the original response
+        print("❌ Could not extract valid JSON from response")
+        return response
+    }
+
+    private func handleCommand() {
+        guard isSubscribed, !commandInput.isEmpty else {
+            if !isSubscribed {
+                showSubscriptionAlert = true
+            } else {
+                alertMessage = "Please enter a command"
+            showAlert = true
+            }
+            return
+        }
+        
+        let currentCommand = commandInput
+        commandInput = "" // Clear the input immediately
+        
+        let enhancedPrompt = """
+        Parse this command: "\(currentCommand)". 
+        
+        Return ONLY a JSON object with:
+        - "action": string (e.g., "add meeting", "schedule meeting", "open maps", "navigate to", "open safari", "open website", "browse", "open messages", "send message", "text", "open phone", "call", "open mail", "send email", "open camera", "take photo", "open photos", "open settings", "open notes", "create note", "prioritize messages", "tell main stats", "sign message", "open user portal", "toggle stream", "check balance", "send payment")
+        - "parameters": object with relevant data:
+          * For meetings: "title" (optional, default "Meeting"), "start" (required, ISO8601 format), "end" (optional, defaults to 1 hour after start)
+          * For maps/navigation: "location" (single location) OR "start_location" and "end_location" (for routes)
+          * For messages: "contact" and "message" (both required)
+          * For phone: "contact" (required)
+          * For email: "to" (required), "subject" (optional, default "Message from PAAI")
+          * For notes: "title" and "content" (both optional)
+          * For safari: "url" (required)
+          * For sign message: "message" (required)
+          * For payments: "to" (address) and "amount" (number, required)
+        
+        Use UTC timezone and assume today is 2025-07-15. Return ONLY the JSON object, no additional text or explanation.
+        """
+        
+        print("Sending enhanced AI request: \(enhancedPrompt)")
+        networkService.getGrokResponse(input: enhancedPrompt) { result in
+            print("Enhanced AI result: \(result)")
+            switch result {
+            case .success(let response):
+                // assistantService.speak(response)
+                print("🤖 AI Response: \(response)")
+                // Try to extract JSON from the response (it might contain extra text)
+                let cleanResponse = extractJSONFromResponse(response)
+                do {
+                    if let data = cleanResponse.data(using: .utf8),
+                       let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let action = json["action"] as? String {
+                        print("✅ Parsed action: \(action), json: \(json)")
+                        let parameters = json["parameters"] as? [String: Any] ?? [:]
+                        print("📋 Parameters: \(parameters)")
+                        handleAction(action: action, parameters: parameters)
+                    } else {
+                        print("❌ Failed to parse JSON response")
+                        print("📄 Raw response: \(response)")
+                        // assistantService.speak("I received a response but couldn't parse it properly.")
+                    }
+                } catch {
+                    print("❌ JSON parsing error: \(error)")
+                    // assistantService.speak("I received a response but couldn't parse it properly.")
+                    alertMessage = "Failed to parse AI response"
+                    showAlert = true
+                }
+            case .failure(let error):
+                print("AI request failed: \(error)")
+                // assistantService.speak("I'm sorry, I couldn't process that request. Please try again.")
+            }
+        }
+    }
+    
+    private func handleAction(action: String, parameters: [String: Any]) {
+        print("🔧 Handling action: \(action) with parameters: \(parameters)")
+        
+                    switch action {
+                    case "add meeting", "schedule meeting":
+            print("📅 Scheduling meeting with parameters: \(parameters)")
+            
+            // Handle missing parameters with defaults
+            let title = parameters["title"] as? String ?? "Meeting"
+            let start = parameters["start"] as? String
+            let end = parameters["end"] as? String
+            
+            if let startString = start,
+               let startDate = ISO8601DateFormatter().date(from: startString) {
+                // If we have a start time, calculate end time (1 hour later if not provided)
+                let endDate: Date
+                if let endString = end,
+                   let parsedEndDate = ISO8601DateFormatter().date(from: endString) {
+                    endDate = parsedEndDate
+                } else {
+                    // Default to 1 hour duration
+                    endDate = startDate.addingTimeInterval(3600)
+                }
+                
+                print("✅ Valid meeting parameters, adding to calendar")
+                            addToCalendar(title: title, start: startDate, end: endDate)
+                        } else {
+                print("❌ Invalid meeting parameters - missing start time")
+                // assistantService.speak("I couldn't understand the meeting time. Please specify a time.")
+                alertMessage = "Please specify a meeting time"
+                            showAlert = true
+                        }
+        case "open maps", "navigate to":
+            // Handle both single location and start/end locations
+            if let location = parameters["location"] as? String {
+                            openMaps(location: location)
+            } else if let startLocation = parameters["start_location"] as? String,
+                      let endLocation = parameters["end_location"] as? String {
+                // For navigation between two points, use the destination
+                openMaps(location: "\(startLocation) to \(endLocation)")
+            } else if let endLocation = parameters["end_location"] as? String {
+                // If only end location is provided, use that
+                openMaps(location: endLocation)
+            } else {
+                // assistantService.speak("I need a location to navigate to.")
+                alertMessage = "Please specify a location"
+                showAlert = true
+            }
+        case "open safari", "open website", "browse":
+            if let url = parameters["url"] as? String {
+                            openURL(url: url)
+                        }
+        case "open messages", "send message", "text":
+            if let contact = parameters["contact"] as? String,
+               let message = parameters["message"] as? String {
+                openMessages(contact: contact, message: message)
+                        } else {
+                // assistantService.speak("I need a contact and message to send a text.")
+                alertMessage = "Please specify a contact and message"
+                            showAlert = true
+                        }
+        case "open phone", "call":
+            if let contact = parameters["contact"] as? String {
+                openPhone(contact: contact)
+            } else {
+                // assistantService.speak("I need a contact to make a call.")
+                alertMessage = "Please specify a contact to call"
+                            showAlert = true
+                        }
+        case "open mail", "send email":
+            if let to = parameters["to"] as? String {
+                let subject = parameters["subject"] as? String ?? "Message from PAAI"
+                openMail(to: to, subject: subject)
+            } else {
+                // assistantService.speak("I need an email address to send an email.")
+                alertMessage = "Please specify an email address"
+                        showAlert = true
+                    }
+        case "open camera", "take photo":
+            openCamera()
+        case "open photos":
+            openPhotos()
+        case "open settings":
+            openSettings()
+        case "open notes", "create note":
+            if let title = parameters["title"] as? String,
+               let content = parameters["content"] as? String {
+                openNotes(title: title, content: content)
+                } else {
+                openNotes(title: "New Note", content: "")
+            }
+        case "prioritize messages":
+            print("📋 Prioritizing messages")
+                    loadAndPrioritizeMessages()
+                    path.append("prioritization")
+        case "tell main stats":
+            print("📊 Fetching blockchain stats")
+                    fetchBlockchainInfo()
+                    path.append("stats")
+        case "sign message":
+            print("✍️ Signing message with parameters: \(parameters)")
+            if let message = parameters["message"] as? String,
+               let signature = walletService.signMessage(message) {
+                let result = "Signed: \(message) (Signature: \(signature))"
+                print("✅ Message signed successfully: \(result)")
+                alertMessage = result
+                        showAlert = true
+                    } else {
+                print("❌ Failed to sign message")
+                // assistantService.speak("I couldn't sign the message. Please try again.")
+                        alertMessage = "Failed to sign message"
+                        showAlert = true
+                    }
+        case "check balance":
+            print("💰 Checking balance")
+            Task {
+                await tlsService.refreshBalance()
+                await MainActor.run {
+                    let balance = tlsService.formatBalance(tlsService.currentBalance)
+                    print("✅ Balance: \(balance)")
+                    // assistantService.speak("Your current balance is \(balance)")
+                    alertMessage = "Balance: \(balance)"
+                        showAlert = true
+                    }
+            }
+        case "send payment":
+            if let toAddress = parameters["to"] as? String,
+               let amount = parameters["amount"] as? Double {
+                Task {
+                    let response = await tlsService.sendPayment(toAddress: toAddress, amount: amount)
+                    await MainActor.run {
+                        if response.success {
+                            // assistantService.speak("Payment sent successfully. Transaction ID: \(response.txid ?? "Unknown")")
+                            alertMessage = "Payment successful! TXID: \(response.txid ?? "Unknown")"
+                } else {
+                            // assistantService.speak("Payment failed: \(response.error ?? "Unknown error")")
+                            alertMessage = "Payment failed: \(response.error ?? "Unknown error")"
+                        }
+                    showAlert = true
+                }
+            }
+            }
+        default:
+            print("❓ Unknown action: \(action)")
+                            // assistantService.speak("I understand you want to \(action). Let me help you with that.")
+        }
+    }
+
+    private func addToCalendar(title: String, start: Date, end: Date) {
+        let eventStore = EKEventStore()
+        
+        // Request calendar access
+        eventStore.requestFullAccessToEvents { granted, error in
+                DispatchQueue.main.async {
+                if granted {
+                    let event = EKEvent(eventStore: eventStore)
+            event.title = title
+            event.startDate = start
+            event.endDate = end
+                    event.calendar = eventStore.defaultCalendarForNewEvents
+                    
+                    // Add location and notes for better integration
+                    event.location = "Meeting Location"
+                    event.notes = "Meeting scheduled via PAAI Assistant"
+                    
+                    do {
+                        try eventStore.save(event, span: .thisEvent)
+                        // self.assistantService.speak("Event added to your iPhone calendar: \(title)")
+                        self.alertMessage = "Event added to your iPhone calendar: \(title)"
+                    self.showAlert = true
+            } catch {
+                        print("❌ Calendar error: \(error)")
+                        // self.assistantService.speak("Failed to add event to calendar")
+                        self.alertMessage = "❌ Failed to add event: \(error.localizedDescription)"
+                        self.showAlert = true
+                    }
+                } else {
+                    print("❌ Calendar access denied")
+                    // self.assistantService.speak("Calendar access denied. Please enable calendar access in Settings.")
+                    self.alertMessage = "❌ Calendar access denied\nPlease enable calendar access in Settings > Privacy & Security > Calendars"
+                    self.showAlert = true
+                }
+            }
+        }
+    }
+
+    private func openMaps(location: String) {
+        let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location
+        DispatchQueue.main.async {
+            // Check if this is a route (contains " to ")
+            if location.contains(" to ") {
+                let components = location.components(separatedBy: " to ")
+                if components.count == 2 {
+                    let start = components[0].addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? components[0]
+                    let end = components[1].addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? components[1]
+                    // Use Apple Maps directions format
+                    if let url = URL(string: "http://maps.apple.com/?saddr=\(start)&daddr=\(end)") {
+                        UIApplication.shared.open(url)
+                    }
+                } else {
+                    // Fallback to search
+                    if let url = URL(string: "http://maps.apple.com/?q=\(encodedLocation)") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } else {
+                // Single location search
+                if let url = URL(string: "http://maps.apple.com/?q=\(encodedLocation)") {
+                    UIApplication.shared.open(url)
+                }
+            }
+        }
+    }
+
+    private func openURL(url: String) {
+        guard let url = URL(string: url) else { return }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openMessages(contact: String, message: String) {
+        let encodedMessage = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? message
+        let encodedContact = contact.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact
+        DispatchQueue.main.async {
+            if let url = URL(string: "sms:\(encodedContact)&body=\(encodedMessage)") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Messages to send text to \(contact)")
+                    }
+                }
+    }
+    
+    private func openPhone(contact: String) {
+        let encodedContact = contact.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? contact
+        DispatchQueue.main.async {
+            if let url = URL(string: "tel:\(encodedContact)") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Phone to call \(contact)")
+                }
+            }
+    }
+    
+    private func openMail(to: String, subject: String) {
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        DispatchQueue.main.async {
+            if let url = URL(string: "mailto:\(to)?subject=\(encodedSubject)") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Mail to send email to \(to)")
+            }
+        }
+    }
+    
+    private func openCamera() {
+        DispatchQueue.main.async {
+            if let url = URL(string: "camera://") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Camera")
+            }
+        }
+    }
+    
+    private func openPhotos() {
+        DispatchQueue.main.async {
+            if let url = URL(string: "photos-redirect://") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Photos")
+            }
+        }
+    }
+    
+    private func openSettings() {
+        DispatchQueue.main.async {
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Settings")
+                            }
+                        }
+    }
+    
+    private func openNotes(title: String, content: String) {
+        let encodedTitle = title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? title
+        let encodedContent = content.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? content
+        DispatchQueue.main.async {
+            if let url = URL(string: "mobilenotes://note?title=\(encodedTitle)&content=\(encodedContent)") {
+                UIApplication.shared.open(url)
+                // self.assistantService.speak("Opening Notes to create note: \(title)")
+            }
+        }
+    }
+
+    private func fetchTLSPriceHistory() async {
+        isLoadingHistory = true
+        
+        guard let url = URL(string: "https://api.coingecko.com/api/v3/coins/telestai/market_chart?vs_currency=usd&days=7") else {
+            await MainActor.run {
+                isLoadingHistory = false
+            }
+            return
+        }
+        
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            
+            if let prices = response?["prices"] as? [[Any]] {
+                await MainActor.run {
+                    self.priceHistory = prices.compactMap { priceData in
+                        if let price = priceData.last as? Double {
+                            return price
+                        }
+                        return nil
+                    }
+                    self.isLoadingHistory = false
+                }
+            }
+        } catch {
+            print("Failed to fetch TLS price history: \(error)")
+            await MainActor.run {
+                isLoadingHistory = false
+        }
+    }
+}
+}
+
+// MARK: - Supporting Views
+struct PrioritizationView: View {
+    let messages: [Message]
+    @Binding var path: NavigationPath
+
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
+                // Header with back button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(DesignSystem.Typography.bodyMedium)
+                        }
+                        .foregroundColor(DesignSystem.Colors.text)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Message Prioritization")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Spacer()
+                    
+                    // Invisible spacer to center title
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Back")
+                            .font(DesignSystem.Typography.bodyMedium)
+                    }
+                    .opacity(0)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                Spacer()
+                
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    Image(systemName: "message.and.waveform")
+                        .font(.system(size: 60))
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    
+                    Text("Message Prioritization")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("Coming Soon")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                Spacer()
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+struct StatsView: View {
+    @Binding var path: NavigationPath
+    
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
+                // Header with back button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(DesignSystem.Typography.bodyMedium)
+            }
+                        .foregroundColor(DesignSystem.Colors.text)
+            }
+                    
+                    Spacer()
+                    
+                    Text("Blockchain Stats")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Spacer()
+                    
+                    // Invisible spacer to center title
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Back")
+                            .font(DesignSystem.Typography.bodyMedium)
+                    }
+                    .opacity(0)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                Spacer()
+                
+                VStack(spacing: DesignSystem.Spacing.lg) {
+                    Image(systemName: "chart.bar.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    
+                    Text("Blockchain Stats")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("Coming Soon")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                
+                Spacer()
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+struct UserPortalView: View {
+    @Binding var path: NavigationPath
+    
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack {
+                Text("User Portal")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                    .padding()
+                
+                Spacer()
+                
+                Text("Coming Soon")
+                    .font(DesignSystem.Typography.bodyMedium)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                
+                Spacer()
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+// MARK: - Profile View
+struct ProfileView: View {
+    @Binding var path: NavigationPath
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var isStreaming = false
+    @State private var voiceEnabled = false // Disabled by default
+    @State private var autoRespond = false
+    @State private var profileImage: UIImage?
+    @State private var showImagePicker = false
+    private let walletService = WalletService.shared
+
+    var body: some View {
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                // Header with Back Button
+                HStack {
+                    Button(action: {
+                        path.removeLast()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
+                    Spacer()
+                    
+                    Text("Profile & Settings")
+                        .font(DesignSystem.Typography.titleMedium)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Spacer()
+                    
+                    // Placeholder for symmetry
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                ScrollView {
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        // Profile Picture Section
+                        CardView {
+                            VStack(spacing: DesignSystem.Spacing.md) {
+                                Text("Personal Information")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                // Profile Picture
+                                Button(action: {
+                                    showImagePicker = true
+                                }) {
+                                    if let profileImage = profileImage {
+                                        Image(uiImage: profileImage)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(Circle())
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(DesignSystem.Colors.secondary, lineWidth: 3)
+                                            )
+                                    } else {
+                                        Image(systemName: "person.circle.fill")
+                                            .font(.system(size: 100))
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                    }
+                                }
+                                
+                                Text("Tap to upload photo")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                                
+                                // Personal Info Fields
+                                VStack(spacing: DesignSystem.Spacing.sm) {
+                                    InputField("Display Name", text: $displayName)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    
+                                    InputField("Bio", text: $userBio)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    
+                                    InputField("Location", text: $userLocation)
+                                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Wallet Info
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Wallet Information")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                        Button(action: {
+                                    if let address = walletService.loadAddress() {
+                            UIPasteboard.general.string = address
+                                        alertMessage = "Address copied to clipboard!"
+                            showAlert = true
+                                    }
+                                }) {
+                                    VStack(spacing: DesignSystem.Spacing.xs) {
+                                        Text("TLS Address")
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        
+                                        Text(formatAddress(walletService.loadAddress() ?? "Not set"))
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                            .multilineTextAlignment(.center)
+                                            .lineLimit(2)
+                                        
+                                        Text("Tap to copy")
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                        }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.surface.opacity(0.5))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
+                                
+                                Text("Subscription: \(walletService.checkSubscription() ? "Active" : "Inactive")")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(walletService.checkSubscription() ? DesignSystem.Colors.success : DesignSystem.Colors.error)
+                            }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // AI Status
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("AI Status")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                    HStack {
+                                        Image(systemName: "brain.head.profile")
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                            .font(.system(size: 20))
+                                        
+                                        Text("xAI Grok Integration")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        
+                                        Spacer()
+                                        
+                                        Text("Active")
+                                            .font(DesignSystem.Typography.bodySmall)
+                                            .foregroundColor(DesignSystem.Colors.success)
+                                            .padding(.horizontal, DesignSystem.Spacing.sm)
+                                            .padding(.vertical, 4)
+                                            .background(DesignSystem.Colors.success.opacity(0.2))
+                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
+                                    }
+                                    
+                                    Text("AI features are automatically configured")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .multilineTextAlignment(.leading)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Security & Session Management
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Security & Sessions")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Toggle("Biometric Authentication", isOn: $biometricEnabled)
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    Button(action: {
+                                        showSessionManagement = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "iphone")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Manage Sessions")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Preferences
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Preferences")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    HStack {
+                                        Text("Language")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        Spacer()
+                                        Picker("Language", selection: $selectedLanguage) {
+                                            ForEach(availableLanguages, id: \.self) { language in
+                                                Text(language).tag(language)
+                                            }
+                                        }
+                                        .pickerStyle(MenuPickerStyle())
+                                    }
+                                    
+                                    HStack {
+                                        Text("Currency")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        Spacer()
+                                        Picker("Currency", selection: $selectedCurrency) {
+                                            ForEach(availableCurrencies, id: \.self) { currency in
+                                                Text(currency).tag(currency)
+                                            }
+                                        }
+                                        .pickerStyle(MenuPickerStyle())
+                                    }
+                                    
+                                    HStack {
+                                        Text("Theme")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        Spacer()
+                                        Picker("Theme", selection: $selectedTheme) {
+                                            ForEach(availableThemes, id: \.self) { theme in
+                                                Text(theme).tag(theme)
+                                            }
+                                        }
+                                        .pickerStyle(MenuPickerStyle())
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Analytics
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Analytics")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                Button(action: {
+                                    showAnalytics = true
+                                }) {
+                                    HStack {
+                                        Image(systemName: "chart.bar.fill")
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                        Text("View Usage Analytics")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    }
+                                    .padding(.vertical, DesignSystem.Spacing.sm)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Support & Help
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                Text("Support & Help")
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Button(action: {
+                                        showBugReport = true
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundColor(DesignSystem.Colors.error)
+                                            Text("Report a Bug")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                    
+                                    Button(action: {
+                                        if let url = URL(string: "https://discord.gg/VmFXfHnZE5") {
+                                            UIApplication.shared.open(url)
+                                        }
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "message.circle.fill")
+                                                .foregroundColor(DesignSystem.Colors.secondary)
+                                            Text("Speak with Team")
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        .padding(.vertical, DesignSystem.Spacing.sm)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        // Action Buttons
+                        VStack(spacing: DesignSystem.Spacing.md) {
+                            PrimaryButton("Test Connection") {
+                                testConnection()
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                        
+                        Spacer(minLength: DesignSystem.Spacing.xl)
+                        }
+                }
+            }
+        }
+        .navigationBarHidden(true)
+        .alert("Profile", isPresented: $showAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(selectedImage: $profileImage)
+        }
+        .sheet(isPresented: $showSessionManagement) {
+            SessionManagementView(sessions: $activeSessions)
+        }
+        .sheet(isPresented: $showAnalytics) {
+            AnalyticsView(analyticsData: $analyticsData)
+        }
+        .sheet(isPresented: $showBugReport) {
+            BugReportView(bugDescription: $bugDescription, bugCategory: $bugCategory, bugCategories: bugCategories)
+        }
+        .onAppear {
+            loadSettings()
+        }
+    }
+    
+    private func loadSettings() {
+        // Load other settings
+        if let streamingData = walletService.keychain.read(key: "streaming_enabled"),
+           let streaming = Bool(streamingData) {
+            isStreaming = streaming
+        }
+        
+        if let voiceData = walletService.keychain.read(key: "voice_enabled"),
+           let voice = Bool(voiceData) {
+            voiceEnabled = voice
+        }
+        
+        if let autoData = walletService.keychain.read(key: "auto_respond"),
+           let auto = Bool(autoData) {
+            autoRespond = auto
+        }
+        
+        // Load profile image
+        if let imageData = walletService.keychain.read(key: "profile_image"),
+           let data = Data(base64Encoded: imageData),
+           let image = UIImage(data: data) {
+            profileImage = image
+        }
+    }
+    
+
+    
+    private func saveSettings() {
+        // Save streaming setting
+        _ = walletService.keychain.save(key: "streaming_enabled", value: String(isStreaming))
+        
+        // Save voice setting
+        _ = walletService.keychain.save(key: "voice_enabled", value: String(voiceEnabled))
+        
+        // Save auto-respond setting
+        _ = walletService.keychain.save(key: "auto_respond", value: String(autoRespond))
+        
+        // Save profile image if available
+        if let profileImage = profileImage,
+           let imageData = profileImage.jpegData(compressionQuality: 0.8) {
+            let base64String = imageData.base64EncodedString()
+            _ = walletService.keychain.save(key: "profile_image", value: base64String)
+        }
+    }
+    
+    private func formatAddress(_ address: String) -> String {
+        if address == "Not set" {
+            return address
+        }
+        let prefix = String(address.prefix(8))
+        let suffix = String(address.suffix(6))
+        return "\(prefix)...\(suffix)"
+    }
+    
+    private func testConnection() {
+        // Test the AI connection
+        alertMessage = "Testing AI connection..."
+                showAlert = true
+        
+        // Test the AI with a simple request
+        NetworkService.shared.getGrokResponse(input: "Hello") { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(_):
+                    self.alertMessage = "AI connection successful!"
+                case .failure(let error):
+                    self.alertMessage = "AI connection failed: \(error.localizedDescription)"
+                }
+                self.showAlert = true
+        }
+    }
+}
+}
+
+// MARK: - Supporting Views for New Features
+
+struct SessionManagementView: View {
+    @Binding var sessions: [SessionInfo]
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack {
+                    // Header
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Spacer()
+                        
+                        Text("Active Sessions")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                        
+                        Button("Done") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    
+                    // Sessions List
+                    ScrollView {
+                        VStack(spacing: DesignSystem.Spacing.md) {
+                            ForEach(sessions) { session in
+                                CardView {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                            Text(session.deviceName)
+                                                .font(DesignSystem.Typography.bodyMedium)
+                                                .foregroundColor(DesignSystem.Colors.text)
+                                            
+                                            Text(session.location)
+                                                .font(DesignSystem.Typography.caption)
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                            
+                                            Text("Last active: \(session.lastActive, style: .relative)")
+                                                .font(DesignSystem.Typography.caption)
+                                                .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        if session.isCurrent {
+                                            Text("Current")
+                                                .font(DesignSystem.Typography.caption)
+                                                .foregroundColor(DesignSystem.Colors.success)
+                                                .padding(.horizontal, DesignSystem.Spacing.sm)
+                                                .padding(.vertical, 4)
+                                                .background(DesignSystem.Colors.success.opacity(0.2))
+                                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
+                                        } else {
+                                            Button("Terminate") {
+                                                // Remove session logic
+                                            }
+                                            .font(DesignSystem.Typography.caption)
+                                            .foregroundColor(DesignSystem.Colors.error)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct AnalyticsView: View {
+    @Binding var analyticsData: AnalyticsData?
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack {
+                    // Header
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Spacer()
+                        
+                        Text("Usage Analytics")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                        
+                        Button("Done") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    
+                    // Analytics Content
+                    ScrollView {
+                        VStack(spacing: DesignSystem.Spacing.lg) {
+                            if let data = analyticsData {
+                                // Transaction Stats
+                                CardView {
+                                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                        Text("Transaction Statistics")
+                                            .font(DesignSystem.Typography.headline)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        
+                                        VStack(spacing: DesignSystem.Spacing.sm) {
+                                            HStack {
+                                                Text("Total Transactions")
+                                                Spacer()
+                                                Text("\(data.totalTransactions)")
+                                                    .font(DesignSystem.Typography.bodyMedium)
+                                                    .foregroundColor(DesignSystem.Colors.secondary)
+                                            }
+                                            
+                                            HStack {
+                                                Text("Total Volume")
+                                                Spacer()
+                                                Text("$\(String(format: "%.2f", data.totalVolume))")
+                                                    .font(DesignSystem.Typography.bodyMedium)
+                                                    .foregroundColor(DesignSystem.Colors.secondary)
+                                            }
+                                            
+                                            HStack {
+                                                Text("Average Transaction")
+                                                Spacer()
+                                                Text("$\(String(format: "%.2f", data.averageTransactionSize))")
+                                                    .font(DesignSystem.Typography.bodyMedium)
+                                                    .foregroundColor(DesignSystem.Colors.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                                
+                                // Usage Stats
+                                CardView {
+                                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                        Text("Usage Statistics")
+                                            .font(DesignSystem.Typography.headline)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        
+                                        VStack(spacing: DesignSystem.Spacing.sm) {
+                                            HStack {
+                                                Text("Daily Active Minutes")
+                                                Spacer()
+                                                Text("\(data.dailyActiveMinutes)")
+                                                    .font(DesignSystem.Typography.bodyMedium)
+                                                    .foregroundColor(DesignSystem.Colors.secondary)
+                                            }
+                                            
+                                            // Most Used Features
+                                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+                                                Text("Most Used Features")
+                                                    .font(DesignSystem.Typography.bodyMedium)
+                                                    .foregroundColor(DesignSystem.Colors.text)
+                                                
+                                                ForEach(Array(data.mostUsedFeatures.prefix(3)), id: \.key) { feature in
+                                                    HStack {
+                                                        Text(feature.key)
+                                                            .font(DesignSystem.Typography.caption)
+                                                        Spacer()
+                                                        Text("\(feature.value)")
+                                                            .font(DesignSystem.Typography.caption)
+                                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                            } else {
+                                // Placeholder
+                                VStack(spacing: DesignSystem.Spacing.lg) {
+                                    Image(systemName: "chart.bar.fill")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(DesignSystem.Colors.secondary)
+                                    
+                                    Text("Analytics Coming Soon")
+                                        .font(DesignSystem.Typography.titleMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    Text("Usage analytics will be available soon")
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct BugReportView: View {
+    @Binding var bugDescription: String
+    @Binding var bugCategory: String
+    let bugCategories: [String]
+    @Environment(\.dismiss) private var dismiss
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                DesignSystem.Colors.background
+                    .ignoresSafeArea()
+                
+                VStack {
+                    // Header
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Spacer()
+                        
+                        Text("Report a Bug")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                        
+                        Button("Submit") {
+                            submitBugReport()
+                        }
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.lg)
+                    
+                    // Bug Report Form
+                    ScrollView {
+                        VStack(spacing: DesignSystem.Spacing.lg) {
+                            // Category Selection
+                            CardView {
+                                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                    Text("Bug Category")
+                                        .font(DesignSystem.Typography.headline)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    Picker("Category", selection: $bugCategory) {
+                                        ForEach(bugCategories, id: \.self) { category in
+                                            Text(category).tag(category)
+                                        }
+                                    }
+                                    .pickerStyle(MenuPickerStyle())
+                                }
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                            
+                            // Description
+                            CardView {
+                                VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+                                    Text("Description")
+                                        .font(DesignSystem.Typography.headline)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                    
+                                    TextEditor(text: $bugDescription)
+                                        .frame(minHeight: 120)
+                                        .padding(DesignSystem.Spacing.sm)
+                                        .background(DesignSystem.Colors.surface)
+                                        .cornerRadius(DesignSystem.CornerRadius.small)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                                                .stroke(DesignSystem.Colors.secondary.opacity(0.3))
+                                        )
+                            }
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                        }
+                    }
+                }
+            }
+        }
+        .alert("Bug Report", isPresented: $showAlert) {
+            Button("OK") { }
+        } message: {
+            Text(alertMessage)
+        }
+    }
+    
+    private func submitBugReport() {
+        // Submit bug report logic
+        alertMessage = "Bug report submitted successfully!"
+        showAlert = true
+        dismiss()
+    }
+}
+
+// MARK: - Image Picker
+struct ImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: ImagePicker
+        
+        init(_ parent: ImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                parent.selectedImage = image
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+}
+
+// MARK: - Line Chart View
+struct LineChartView: View {
+    let data: [Double]
+    let width: CGFloat
+    let height: CGFloat
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                guard !data.isEmpty else { return }
+                
+                let stepX = geometry.size.width / CGFloat(data.count - 1)
+                let maxValue = data.max() ?? 1.0
+                let minValue = data.min() ?? 0.0
+                let range = maxValue - minValue
+                
+                for (index, value) in data.enumerated() {
+                    let x = CGFloat(index) * stepX
+                    let y = geometry.size.height - (CGFloat((value - minValue) / range) * geometry.size.height)
+                    
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+            }
+            .stroke(DesignSystem.Colors.secondary, lineWidth: 2)
+        }
+        .frame(width: width, height: height)
+    }
+}
+
+// MARK: - Bottom Navigation View
+struct BottomNavigationView: View {
+    @Binding var selectedTab: Int
+    @Binding var showMessaging: Bool
+    @Binding var showHamburgerMenu: Bool
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // Profile Tab
+            Button(action: {
+                selectedTab = 0
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: selectedTab == 0 ? "person.circle.fill" : "person.circle")
+                        .font(.system(size: 24))
+                    Text("Profile")
+                        .font(DesignSystem.Typography.caption)
+                }
+                .foregroundColor(selectedTab == 0 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+            }
+            
+            // Messaging Tab
+            Button(action: {
+                showMessaging = true
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: "message.circle")
+                        .font(.system(size: 24))
+                    Text("Messages")
+                        .font(DesignSystem.Typography.caption)
+                }
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+            }
+            
+            // Menu Tab
+            Button(action: {
+                showHamburgerMenu = true
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 24))
+                    Text("Menu")
+                        .font(DesignSystem.Typography.caption)
+                }
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .background(DesignSystem.Colors.surface)
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(DesignSystem.Colors.secondary.opacity(0.3)),
+            alignment: .top
+        )
+    }
+}
+
+// MARK: - Supporting Views
+struct SubscriptionView: View {
+    @Binding var path: NavigationPath
+    
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.lg) {
+            Text("Subscription Required")
+                .font(DesignSystem.Typography.titleLarge)
+                .foregroundColor(DesignSystem.Colors.text)
+            
+            Text("Please subscribe to access premium features")
+                .font(DesignSystem.Typography.bodyMedium)
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+            
+            PrimaryButton("Subscribe", isLoading: false) {
+                // Handle subscription
+            }
+            
+            SecondaryButton(title: "Cancel") {
+                path.removeLast()
+            }
+        }
+        .padding()
+    }
+}
+
+struct SendView: View {
+    var body: some View {
+        VStack {
+            Text("Send TLS")
+                .font(DesignSystem.Typography.titleLarge)
+            // Add send functionality
+        }
+    }
+}
+
+struct ReceiveView: View {
+    var body: some View {
+        VStack {
+            Text("Receive TLS")
+                .font(DesignSystem.Typography.titleLarge)
+            // Add receive functionality
+        }
+    }
+}
+
+struct TransactionsView: View {
+    var body: some View {
+        VStack {
+            Text("Transaction History")
+                .font(DesignSystem.Typography.titleLarge)
+            // Add transaction history
+        }
+    }
+}
+
+// MARK: - Loading View
+struct LoadingView: View {
+    let message: String
+    
+    var body: some View {
+        VStack(spacing: DesignSystem.Spacing.lg) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.secondary))
+            
+            Text(message)
+                .font(DesignSystem.Typography.bodyMedium)
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+        }
+    }
+}

@@ -1,18 +1,119 @@
 import SwiftUI
 
+// MARK: - Theme Manager
+class ThemeManager: ObservableObject {
+    static let shared = ThemeManager()
+    
+    @Published var currentTheme: String = "System" {
+        didSet {
+            updateTheme()
+        }
+    }
+    
+    private init() {
+        updateTheme()
+    }
+    
+    private func updateTheme() {
+        // This will be called when theme changes
+        // The actual theme application happens in the Colors struct
+    }
+}
+
 // MARK: - Design System
 struct DesignSystem {
     
     // MARK: - Colors
     struct Colors {
-        static let primary = Color(hex: "#4f225b")
-        static let secondary = Color(hex: "#b37fc6")
-        static let accent = Color(hex: "#803a99")
-        static let light = Color(hex: "#d6b8db")
-        static let background = Color(hex: "#4f225b")
-        static let surface = Color(hex: "#4f225b").opacity(0.1)
-        static let text = Color.white
-        static let textSecondary = Color.white.opacity(0.8)
+        // Theme-aware colors
+        static var primary: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color(hex: "#4f225b")
+            case "Dark":
+                return Color(hex: "#2d1b3d")
+            default: // System
+                return Color(hex: "#4f225b")
+            }
+        }
+        
+        static var secondary: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color(hex: "#b37fc6")
+            case "Dark":
+                return Color(hex: "#8a5a9a")
+            default: // System
+                return Color(hex: "#b37fc6")
+            }
+        }
+        
+        static var accent: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color(hex: "#803a99")
+            case "Dark":
+                return Color(hex: "#6b2d7a")
+            default: // System
+                return Color(hex: "#803a99")
+            }
+        }
+        
+        static var light: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color(hex: "#d6b8db")
+            case "Dark":
+                return Color(hex: "#a88bb0")
+            default: // System
+                return Color(hex: "#d6b8db")
+            }
+        }
+        
+        static var background: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color(hex: "#f8f9fa")
+            case "Dark":
+                return Color(hex: "#1a1a1a")
+            default: // System
+                return Color(hex: "#4f225b")
+            }
+        }
+        
+        static var surface: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.white
+            case "Dark":
+                return Color(hex: "#2d2d2d")
+            default: // System
+                return Color(hex: "#4f225b").opacity(0.1)
+            }
+        }
+        
+        static var text: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black
+            case "Dark":
+                return Color.white
+            default: // System
+                return Color.white
+            }
+        }
+        
+        static var textSecondary: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black.opacity(0.7)
+            case "Dark":
+                return Color.white.opacity(0.7)
+            default: // System
+                return Color.white.opacity(0.8)
+            }
+        }
+        
         static let error = Color.red
         static let success = Color.green
         static let warning = Color.orange
@@ -50,9 +151,50 @@ struct DesignSystem {
     
     // MARK: - Shadows
     struct Shadows {
-        static let small = Color.black.opacity(0.1)
-        static let medium = Color.black.opacity(0.15)
-        static let large = Color.black.opacity(0.2)
+        static var small: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black.opacity(0.08)
+            case "Dark":
+                return Color.black.opacity(0.3)
+            default: // System
+                return Color.black.opacity(0.1)
+            }
+        }
+        
+        static var medium: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black.opacity(0.12)
+            case "Dark":
+                return Color.black.opacity(0.4)
+            default: // System
+                return Color.black.opacity(0.15)
+            }
+        }
+        
+        static var large: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black.opacity(0.16)
+            case "Dark":
+                return Color.black.opacity(0.5)
+            default: // System
+                return Color.black.opacity(0.2)
+            }
+        }
+        
+        // Elevation shadows for cards
+        static var cardElevation: Color {
+            switch ThemeManager.shared.currentTheme {
+            case "Light":
+                return Color.black.opacity(0.06)
+            case "Dark":
+                return Color.black.opacity(0.25)
+            default: // System
+                return Color.black.opacity(0.08)
+            }
+        }
     }
 }
 
@@ -128,7 +270,9 @@ struct InputField: View {
             }
         }
         .font(DesignSystem.Typography.bodyLarge)
+        .foregroundColor(DesignSystem.Colors.text)
         .padding(DesignSystem.Spacing.md)
+        .frame(minHeight: 44)
         .background(DesignSystem.Colors.surface)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
         .overlay(
@@ -151,7 +295,16 @@ struct CardView<Content: View>: View {
             .padding(DesignSystem.Spacing.md)
             .background(DesignSystem.Colors.surface)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large))
-            .shadow(color: DesignSystem.Shadows.small, radius: 4, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                    .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 0.5)
+            )
+            // Multiple shadow layers for proper elevation effect
+            .shadow(color: DesignSystem.Shadows.cardElevation, radius: 1, x: 0, y: 1)
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.5), radius: 3, x: 0, y: 2)
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.3), radius: 6, x: 0, y: 4)
+            // Accentuated shadow on bottom and right for enhanced depth
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.8), radius: 2, x: 1, y: 3)
     }
 }
 
@@ -233,6 +386,15 @@ extension View {
             .padding(DesignSystem.Spacing.md)
             .background(DesignSystem.Colors.surface)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large))
-            .shadow(color: DesignSystem.Shadows.small, radius: 4, x: 0, y: 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                    .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 0.5)
+            )
+            // Multiple shadow layers for proper elevation effect
+            .shadow(color: DesignSystem.Shadows.cardElevation, radius: 1, x: 0, y: 1)
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.5), radius: 3, x: 0, y: 2)
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.3), radius: 6, x: 0, y: 4)
+            // Accentuated shadow on bottom and right for enhanced depth
+            .shadow(color: DesignSystem.Shadows.cardElevation.opacity(0.8), radius: 2, x: 1, y: 3)
     }
 } 

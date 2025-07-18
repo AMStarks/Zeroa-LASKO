@@ -12,16 +12,24 @@ class NetworkService {
             return envKey
         }
         
+        // Try to get from keychain (user-entered)
+        if let keychainKey = WalletService.shared.keychain.read(key: "xai_api_key") {
+            print("🔑 API Key loaded from keychain: \(String(keychainKey.prefix(10)))...")
+            return keychainKey
+        }
+        
         // Fallback to a local config file (not tracked in git)
         if let configPath = Bundle.main.path(forResource: "Config", ofType: "plist"),
            let config = NSDictionary(contentsOfFile: configPath),
-           let key = config["XAI_API_KEY"] as? String {
+           let key = config["XAI_API_KEY"] as? String,
+           key != "REPLACE_WITH_YOUR_ACTUAL_XAI_API_KEY_HERE" {
             print("🔑 API Key loaded from Config.plist: \(String(key.prefix(10)))...")
             return key
         }
         
         // Return empty string if not found (will cause auth error)
-        print("❌ No API key found in environment or config file!")
+        print("❌ No API key found in environment, keychain, or config file!")
+        print("💡 Please configure your xAI API key in Config.plist")
         return ""
     }
 
@@ -29,8 +37,16 @@ class NetworkService {
         print("🌐 Making API request to: \(apiUrl)")
         print("📝 Input: \(input)")
         
+        // Check if API key is available
+        guard !apiKey.isEmpty else {
+            print("❌ No API key available")
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No API key configured. Please enter your xAI API key in Profile & Settings."])))
+            return
+        }
+        
         guard let url = URL(string: apiUrl) else { 
             print("❌ Invalid URL")
+            completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])))
             return 
         }
         
@@ -42,7 +58,8 @@ class NetworkService {
         let body: [String: Any] = [
             "model": "grok-3",
             "messages": [["role": "user", "content": input]],
-            "max_tokens": 500
+            "max_tokens": 500,
+            "temperature": 0.7
         ]
         
         print("🔑 Authorization header: Bearer \(String(apiKey.prefix(10)))...")
@@ -68,13 +85,29 @@ class NetworkService {
                 }
             }
             
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            guard let data = data else {
+                print("❌ No response data")
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "No response data"])))
+                return
+            }
+            
+            // Check for API key error first
+            if let responseString = String(data: data, encoding: .utf8),
+               responseString.contains("Incorrect API key") {
+                print("❌ Invalid API key")
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid API key. Please check your xAI API key in Profile & Settings."])))
+                return
+            }
+            
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let choices = json["choices"] as? [[String: Any]],
                   let message = choices.first?["message"] as? [String: Any],
                   let content = message["content"] as? String else {
                 print("❌ Failed to parse response JSON")
-                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])))
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("📦 Raw response: \(responseString)")
+                }
+                completion(.failure(NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response format"])))
                 return
             }
             
