@@ -689,8 +689,18 @@ struct HomeView: View {
                 VStack(spacing: DesignSystem.Spacing.xl) {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         HStack(spacing: DesignSystem.Spacing.sm) {
-                            InputField("How may I help you?", text: $commandInput)
+                            TextField("How may I help you?", text: $commandInput)
+                                .font(DesignSystem.Typography.bodyLarge)
+                                .foregroundColor(DesignSystem.Colors.text)
+                                .padding(DesignSystem.Spacing.md)
                                 .frame(maxWidth: .infinity)
+                                .frame(minHeight: 44)
+                                .background(DesignSystem.Colors.surface)
+                                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                        .stroke(DesignSystem.Colors.light.opacity(0.3), lineWidth: 1)
+                                )
                                 .focused($isCommandFieldFocused)
                                 .onSubmit {
                                     handleCommand()
