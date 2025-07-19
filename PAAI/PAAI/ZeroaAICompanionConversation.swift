@@ -10,7 +10,7 @@ struct CompanionMessage: Identifiable, Codable {
     let timestamp: Date
     let sender: MessageSender
     let messageType: MessageType
-    let context: [String: String]?
+    let context: [String: Any]?
     let emotionalContext: ConversationMemory.EmotionalContext?
     
     enum MessageSender: String, Codable {
@@ -25,23 +25,6 @@ struct CompanionMessage: Identifiable, Codable {
         case suggestion = "suggestion"
         case error = "error"
         case system = "system"
-    }
-    
-    // Custom initializer to handle [String: Any] conversion
-    init(id: String, content: String, timestamp: Date, sender: MessageSender, messageType: MessageType, context: [String: Any]?, emotionalContext: ConversationMemory.EmotionalContext?) {
-        self.id = id
-        self.content = content
-        self.timestamp = timestamp
-        self.sender = sender
-        self.messageType = messageType
-        self.emotionalContext = emotionalContext
-        
-        // Convert [String: Any] to [String: String] for Codable conformance
-        if let context = context {
-            self.context = context.mapValues { String(describing: $0) }
-        } else {
-            self.context = nil
-        }
     }
 }
 
@@ -84,7 +67,7 @@ struct CompanionConversationView: View {
                                 
                                 // Messages
                                 ForEach(messages) { message in
-                                    CompanionMessageBubble(message: message)
+                                    MessageBubble(message: message)
                                         .id(message.id)
                                 }
                                 
@@ -243,9 +226,6 @@ struct CompanionConversationView: View {
             context["user_preferences"] = preferences.preferredTopics
         }
         
-        // Add TLS balance from the main app (using cached value)
-        context["tlsBalance"] = TLSBlockchainService.shared.currentBalance
-        
         return context
     }
     
@@ -351,7 +331,7 @@ struct WelcomeMessageView: View {
 }
 
 /// Individual message bubble
-struct CompanionMessageBubble: View {
+struct MessageBubble: View {
     let message: CompanionMessage
     
     var body: some View {

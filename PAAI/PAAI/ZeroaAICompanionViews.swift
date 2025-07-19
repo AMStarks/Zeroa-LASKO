@@ -10,7 +10,6 @@ struct CompanionManagementView: View {
     @State private var showCreateCompanion = false
     @State private var showMarketplace = false
     @State private var showSettings = false
-    @State private var showConversation = false
     
     var body: some View {
         NavigationView {
@@ -44,7 +43,7 @@ struct CompanionManagementView: View {
                     VStack(spacing: DesignSystem.Spacing.md) {
                         if companionService.currentPersonality != nil {
                             Button(action: {
-                                showConversation = true
+                                // Start conversation
                             }) {
                                 HStack {
                                     Image(systemName: "message.fill")
@@ -109,9 +108,6 @@ struct CompanionManagementView: View {
         }
         .sheet(isPresented: $showSettings) {
             CompanionSettingsView()
-        }
-        .sheet(isPresented: $showConversation) {
-            CompanionConversationView()
         }
     }
 }
