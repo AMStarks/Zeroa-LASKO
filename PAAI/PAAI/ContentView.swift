@@ -1448,7 +1448,7 @@ struct BottomNavigationView: View {
             }
         }
         .padding(.vertical, DesignSystem.Spacing.md)
-        .padding(.bottom, -60) // Negative padding to push beyond safe area
+        .padding(.bottom, DesignSystem.Spacing.xs) // 2mm from bottom of screen
         .background(DesignSystem.Colors.background)
         .overlay(
             Rectangle()
