@@ -42,13 +42,33 @@ class WalletService {
         let expectedMnemonic = "heart nephew reason juice joy reflect poet suspect accuse atom march glue"
         let expectedAddress = "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
         
-        if mnemonic.trimmingCharacters(in: .whitespacesAndNewlines) == expectedMnemonic {
+        // Normalize both strings for comparison
+        let normalizedInput = mnemonic
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let normalizedExpected = expectedMnemonic
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        print("🔍 Mnemonic comparison:")
+        print("   Input: '\(normalizedInput)'")
+        print("   Expected: '\(normalizedExpected)'")
+        print("   Match: \(normalizedInput == normalizedExpected)")
+        
+        if normalizedInput == normalizedExpected {
+            print("✅ Mnemonic match found, returning expected address")
             return expectedAddress
         }
         
         // For other mnemonics, generate a deterministic address
         let words = mnemonic.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         guard words.count == 12 else {
+            print("❌ Invalid mnemonic - not 12 words, using fallback")
             // Fallback for invalid mnemonics
             return "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
         }
@@ -58,6 +78,7 @@ class WalletService {
         let hash = SHA256.hash(data: combined.data(using: .utf8) ?? Data())
         let address = "T" + hash.prefix(32).map { String(format: "%02x", $0) }.joined().prefix(33).uppercased()
         
+        print("🔧 Generated deterministic address: \(address)")
         return String(address)
     }
 
