@@ -1408,15 +1408,10 @@ struct BottomNavigationView: View {
                 selectedTab = 0
                 path.append("profile")
             }) {
-                VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 0 ? "person.circle.fill" : "person.circle")
-                        .font(.system(size: 32, weight: .medium))
-                    Text("Profile")
-                        .font(DesignSystem.Typography.bodySmall)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(selectedTab == 0 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                Image(systemName: selectedTab == 0 ? "person.circle.fill" : "person.circle")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(selectedTab == 0 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
             
             // Messaging Tab
@@ -1424,15 +1419,10 @@ struct BottomNavigationView: View {
                 selectedTab = 1
                 path.append("messaging")
             }) {
-                VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 1 ? "message.circle.fill" : "message.circle")
-                        .font(.system(size: 32, weight: .medium))
-                    Text("Messages")
-                        .font(DesignSystem.Typography.bodySmall)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(selectedTab == 1 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                Image(systemName: selectedTab == 1 ? "message.circle.fill" : "message.circle")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(selectedTab == 1 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
             
             // AI Companion Tab
@@ -1440,15 +1430,10 @@ struct BottomNavigationView: View {
                 selectedTab = 2
                 path.append("ai-companion")
             }) {
-                VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
-                        .font(.system(size: 32, weight: .medium))
-                    Text("AI")
-                        .font(DesignSystem.Typography.bodySmall)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                Image(systemName: selectedTab == 2 ? "brain.head.profile.fill" : "brain.head.profile")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
             
             // Menu Tab
@@ -1456,15 +1441,10 @@ struct BottomNavigationView: View {
                 selectedTab = 3
                 showHamburgerMenu = true
             }) {
-                VStack(spacing: 6) {
-                    Image(systemName: selectedTab == 3 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
-                        .font(.system(size: 32, weight: .medium))
-                    Text("Menu")
-                        .font(DesignSystem.Typography.bodySmall)
-                        .fontWeight(.medium)
-                }
-                .foregroundColor(selectedTab == 3 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                .frame(maxWidth: .infinity)
+                Image(systemName: selectedTab == 3 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundColor(selectedTab == 3 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.vertical, DesignSystem.Spacing.md)
