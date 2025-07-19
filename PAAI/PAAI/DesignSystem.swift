@@ -112,9 +112,9 @@ struct DesignSystem {
             case "Dark":
                 return Color(hex: "#2d2d2d")
             case "Native":
-                return Color(hex: "#4f225b").opacity(0.1)
+                return Color(hex: "#4f225b").opacity(0.3)
             default: // System
-                return Color(hex: "#4f225b").opacity(0.1)
+                return Color(hex: "#4f225b").opacity(0.3)
             }
         }
         

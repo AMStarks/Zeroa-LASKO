@@ -189,7 +189,7 @@ struct ChatView: View {
                         ScrollView {
                             LazyVStack(spacing: DesignSystem.Spacing.sm) {
                                 ForEach(messages) { message in
-                                    MessageBubble(message: message, isFromCurrentUser: message.senderAddress == WalletService.shared.loadAddress())
+                                    ChatMessageBubble(message: message, isFromCurrentUser: message.senderAddress == WalletService.shared.loadAddress())
                                 }
                             }
                             .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -278,7 +278,7 @@ struct ChatView: View {
     }
 }
 
-struct MessageBubble: View {
+struct ChatMessageBubble: View {
     let message: ChatMessage
     let isFromCurrentUser: Bool
     

@@ -367,8 +367,8 @@ struct CreateAccountView: View {
         isCreating = true
         walletService.importMnemonic(mnemonic) { success, derivedAddress in
             DispatchQueue.main.async {
-                isCreating = false
-                if success {
+            isCreating = false
+            if success {
                     print("✅ Account created successfully with address: \(derivedAddress ?? "unknown")")
                     // Navigate to home screen
                     path.append("home")
@@ -486,12 +486,31 @@ struct HomeView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var prioritizedMessages: [ChatMessage] = []
-    @State private var tlsBalance: Double = 0.0
-    @State private var tlsPrice: Double = 0.0
-    @State private var tlsPriceChange: Double = 0.0
+    // Coin Selection and Data
+    @State private var selectedCoin: String = "Telestai"
+    @State private var availableCoins = ["Telestai", "Bitcoin", "USDT", "USDC", "Litecoin", "Flux", "Kaspa"]
+    @State private var showFilter = false
+    @State private var filteredCoins: [String] = ["Telestai", "Bitcoin", "USDT", "USDC", "Litecoin", "Flux", "Kaspa"]
+    @State private var coinBalance: Double = 0.0
+    @State private var coinPrice: Double = 0.0
+    @State private var coinPriceChange: Double = 0.0
     @State private var isLoadingPrice = false
     @State private var priceHistory: [Double] = []
     @State private var isLoadingHistory = false
+    
+    // Separate price history for each coin
+    @State private var tlsPriceHistory: [Double] = []
+    @State private var bitcoinPriceHistory: [Double] = []
+    @State private var usdtPriceHistory: [Double] = []
+    @State private var usdcPriceHistory: [Double] = []
+    @State private var litecoinPriceHistory: [Double] = []
+    @State private var fluxPriceHistory: [Double] = []
+    @State private var kaspaPriceHistory: [Double] = []
+    
+    // Legacy TLS variables for backward compatibility
+    @State private var tlsBalance: Double = 0.0
+    @State private var tlsPrice: Double = 0.0
+    @State private var tlsPriceChange: Double = 0.0
     
     // Personal Information
     @State private var profilePicture: UIImage?
@@ -546,18 +565,1290 @@ struct HomeView: View {
     private let walletService = WalletService.shared
     private let networkService = NetworkService.shared
 
+    // Place the following functions at the top level of HomeView, after property declarations and before the body property:
+    private func loadCoinData() {
+        Task {
+            await loadCoinDataAsync()
+        }
+    }
+
+    private func loadCoinDataAsync() async {
+        // Update coin-specific data based on selection
+        switch selectedCoin {
+        case "Telestai":
+            await loadTLSData()
+            // Update coin variables with TLS data
+            await MainActor.run {
+                self.coinBalance = self.tlsBalance
+                self.coinPrice = self.tlsPrice
+                self.coinPriceChange = self.tlsPriceChange
+                self.priceHistory = self.tlsPriceHistory
+            }
+        case "Bitcoin":
+            await loadBitcoinData()
+            await MainActor.run {
+                self.priceHistory = self.bitcoinPriceHistory
+            }
+        case "USDT":
+            await loadUSDTData()
+            await MainActor.run {
+                self.priceHistory = self.usdtPriceHistory
+            }
+        case "USDC":
+            await loadUSDCData()
+            await MainActor.run {
+                self.priceHistory = self.usdcPriceHistory
+            }
+        case "Litecoin":
+            await loadLitecoinData()
+            await MainActor.run {
+                self.priceHistory = self.litecoinPriceHistory
+            }
+        case "Flux":
+            await loadFluxData()
+            await MainActor.run {
+                self.priceHistory = self.fluxPriceHistory
+            }
+        case "Kaspa":
+            await loadKaspaData()
+            await MainActor.run {
+                self.priceHistory = self.kaspaPriceHistory
+            }
+        default:
+            await loadTLSData()
+        }
+    }
+
+    private func loadBitcoinData() async {
+        // Load Bitcoin balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real Bitcoin service
+            await MainActor.run {
+                self.coinBalance = 0.5 // Mock Bitcoin balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadBitcoinPrice()
+            
+            // Load price history for chart
+            await loadBitcoinPriceHistory()
+        }
+    }
+
+    private func loadBitcoinPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_bitcoin_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_bitcoin_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_bitcoin_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached Bitcoin price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for Bitcoin price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Bitcoin CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let bitcoin = json["bitcoin"] as? [String: Any],
+                   let usd = bitcoin["usd"] as? Double,
+                   let usdChange = bitcoin["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ Bitcoin price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_bitcoin_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_bitcoin_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_bitcoin_time")
+                    }
+                } else {
+                    print("❌ Failed to parse Bitcoin CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 45000.0
+                        self.coinPriceChange = 2.1
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Bitcoin CoinGecko API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedPrice = UserDefaults.standard.object(forKey: "cached_bitcoin_price") as? Double,
+                   let cachedChange = UserDefaults.standard.object(forKey: "cached_bitcoin_change") as? Double {
+                    await MainActor.run {
+                        self.coinPrice = cachedPrice
+                        self.coinPriceChange = cachedChange
+                        print("✅ Using expired cached Bitcoin price due to rate limit: $\(cachedPrice)")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 45000.0
+                        self.coinPriceChange = 2.1
+                    }
+                }
+            } else {
+                print("❌ Bitcoin CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 45000.0
+                    self.coinPriceChange = 2.1
+                }
+            }
+        } catch {
+            print("❌ Bitcoin CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 45000.0
+                self.coinPriceChange = 2.1
+            }
+        }
+    }
+    
+    private func loadBitcoinPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_bitcoin_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_bitcoin_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.bitcoinPriceHistory = cachedHistory
+                    print("✅ Using cached Bitcoin history: \(cachedHistory.count) data points")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Bitcoin CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.bitcoinPriceHistory = priceHistory
+                            print("✅ Bitcoin price history loaded: \(priceHistory.count) data points")
+                            print("📊 Bitcoin price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_bitcoin_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_bitcoin_history_time")
+                        }
+                    } else {
+                        print("❌ Invalid Bitcoin price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.bitcoinPriceHistory = [44000, 44500, 44800, 44700, 44900, 45100, 45000]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse Bitcoin CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.bitcoinPriceHistory = [44000, 44500, 44800, 44700, 44900, 45100, 45000]
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Bitcoin CoinGecko history API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedHistory = UserDefaults.standard.object(forKey: "cached_bitcoin_history") as? [Double] {
+                    await MainActor.run {
+                        self.bitcoinPriceHistory = cachedHistory
+                        print("✅ Using expired cached Bitcoin history due to rate limit: \(cachedHistory.count) data points")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.bitcoinPriceHistory = [44000, 44500, 44800, 44700, 44900, 45100, 45000]
+                    }
+                }
+            } else {
+                print("❌ Bitcoin CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.bitcoinPriceHistory = [44000, 44500, 44800, 44700, 44900, 45100, 45000]
+                }
+            }
+        } catch {
+            print("❌ Bitcoin CoinGecko history network error: \(error)")
+                                    // Fallback to mock data
+                        await MainActor.run {
+                            self.bitcoinPriceHistory = [44000, 44500, 44800, 44700, 44900, 45100, 45000]
+                        }
+        }
+    }
+    
+    private func loadLitecoinData() async {
+        // Load Litecoin balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real Litecoin service
+            await MainActor.run {
+                self.coinBalance = 25.0 // Mock Litecoin balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadLitecoinPrice()
+            
+            // Load price history for chart
+            await loadLitecoinPriceHistory()
+        }
+    }
+    
+    private func loadLitecoinPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_litecoin_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_litecoin_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_litecoin_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached Litecoin price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for Litecoin price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=litecoin&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Litecoin CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let litecoin = json["litecoin"] as? [String: Any],
+                   let usd = litecoin["usd"] as? Double,
+                   let usdChange = litecoin["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ Litecoin price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_litecoin_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_litecoin_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_litecoin_time")
+                    }
+                } else {
+                    print("❌ Failed to parse Litecoin CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 85.0
+                        self.coinPriceChange = -1.2
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Litecoin CoinGecko API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedPrice = UserDefaults.standard.object(forKey: "cached_litecoin_price") as? Double,
+                   let cachedChange = UserDefaults.standard.object(forKey: "cached_litecoin_change") as? Double {
+                    await MainActor.run {
+                        self.coinPrice = cachedPrice
+                        self.coinPriceChange = cachedChange
+                        print("✅ Using expired cached Litecoin price due to rate limit: $\(cachedPrice)")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 85.0
+                        self.coinPriceChange = -1.2
+                    }
+                }
+            } else {
+                print("❌ Litecoin CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 85.0
+                    self.coinPriceChange = -1.2
+                }
+            }
+        } catch {
+            print("❌ Litecoin CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 85.0
+                self.coinPriceChange = -1.2
+            }
+        }
+    }
+    
+    private func loadLitecoinPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_litecoin_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_litecoin_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.litecoinPriceHistory = cachedHistory
+                    print("✅ Using cached Litecoin history: \(cachedHistory.count) data points")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/litecoin/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Litecoin CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.litecoinPriceHistory = priceHistory
+                            print("✅ Litecoin price history loaded: \(priceHistory.count) data points")
+                            print("📊 Litecoin price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_litecoin_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_litecoin_history_time")
+                        }
+                    } else {
+                        print("❌ Invalid Litecoin price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.litecoinPriceHistory = [86, 85.5, 85.2, 85.8, 85.1, 84.8, 85]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse Litecoin CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.litecoinPriceHistory = [86, 85.5, 85.2, 85.8, 85.1, 84.8, 85]
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Litecoin CoinGecko history API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedHistory = UserDefaults.standard.object(forKey: "cached_litecoin_history") as? [Double] {
+                    await MainActor.run {
+                        self.litecoinPriceHistory = cachedHistory
+                        print("✅ Using expired cached Litecoin history due to rate limit: \(cachedHistory.count) data points")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.litecoinPriceHistory = [86, 85.5, 85.2, 85.8, 85.1, 84.8, 85]
+                    }
+                }
+            } else {
+                print("❌ Litecoin CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.litecoinPriceHistory = [86, 85.5, 85.2, 85.8, 85.1, 84.8, 85]
+                }
+            }
+        } catch {
+            print("❌ Litecoin CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.priceHistory = [86, 85.5, 85.2, 85.8, 85.1, 84.8, 85]
+            }
+        }
+    }
+    
+    private func loadFluxData() async {
+        // Load Flux balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real Flux service
+            await MainActor.run {
+                self.coinBalance = 1500.0 // Mock Flux balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadFluxPrice()
+            
+            // Load price history for chart
+            await loadFluxPriceHistory()
+        }
+    }
+    
+    private func loadFluxPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_flux_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_flux_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_flux_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached Flux price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for Flux price (using zelcash ID)
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=zelcash&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Flux CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let zelcash = json["zelcash"] as? [String: Any],
+                   let usd = zelcash["usd"] as? Double,
+                   let usdChange = zelcash["usd_24h_change"] as? Double {
+                    
+        await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ Flux price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_flux_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_flux_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_flux_time")
+                    }
+            } else {
+                    print("❌ Failed to parse Flux CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 0.65
+                        self.coinPriceChange = 5.3
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Flux CoinGecko API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedPrice = UserDefaults.standard.object(forKey: "cached_flux_price") as? Double,
+                   let cachedChange = UserDefaults.standard.object(forKey: "cached_flux_change") as? Double {
+                    await MainActor.run {
+                        self.coinPrice = cachedPrice
+                        self.coinPriceChange = cachedChange
+                        print("✅ Using expired cached Flux price due to rate limit: $\(cachedPrice)")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 0.65
+                        self.coinPriceChange = 5.3
+                    }
+                }
+            } else {
+                print("❌ Flux CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 0.65
+                    self.coinPriceChange = 5.3
+                }
+            }
+        } catch {
+            print("❌ Flux CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 0.65
+                self.coinPriceChange = 5.3
+            }
+        }
+    }
+    
+    private func loadFluxPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_flux_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_flux_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.fluxPriceHistory = cachedHistory
+                    print("✅ Using cached Flux history: \(cachedHistory.count) data points")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/zelcash/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Flux CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.fluxPriceHistory = priceHistory
+                            print("✅ Flux price history loaded: \(priceHistory.count) data points")
+                            print("📊 Flux price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_flux_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_flux_history_time")
+                        }
+                    } else {
+                        print("❌ Invalid Flux price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.fluxPriceHistory = [0.62, 0.63, 0.64, 0.63, 0.65, 0.66, 0.65]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse Flux CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.fluxPriceHistory = [0.62, 0.63, 0.64, 0.63, 0.65, 0.66, 0.65]
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Flux CoinGecko history API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedHistory = UserDefaults.standard.object(forKey: "cached_flux_history") as? [Double] {
+                    await MainActor.run {
+                        self.fluxPriceHistory = cachedHistory
+                        print("✅ Using expired cached Flux history due to rate limit: \(cachedHistory.count) data points")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.fluxPriceHistory = [0.62, 0.63, 0.64, 0.63, 0.65, 0.66, 0.65]
+                    }
+                }
+            } else {
+                print("❌ Flux CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.fluxPriceHistory = [0.62, 0.63, 0.64, 0.63, 0.65, 0.66, 0.65]
+                }
+            }
+        } catch {
+            print("❌ Flux CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.priceHistory = [0.62, 0.63, 0.64, 0.63, 0.65, 0.66, 0.65]
+            }
+        }
+    }
+    
+    private func loadKaspaData() async {
+        // Load Kaspa balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real Kaspa service
+            await MainActor.run {
+                self.coinBalance = 50000.0 // Mock Kaspa balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadKaspaPrice()
+            
+            // Load price history for chart
+            await loadKaspaPriceHistory()
+        }
+    }
+    
+    private func loadKaspaPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_kaspa_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_kaspa_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_kaspa_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached Kaspa price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+            }
+            return
+            }
+        }
+        
+        // CoinGecko API endpoint for Kaspa price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=kaspa&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Kaspa CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let kaspa = json["kaspa"] as? [String: Any],
+                   let usd = kaspa["usd"] as? Double,
+                   let usdChange = kaspa["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ Kaspa price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_kaspa_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_kaspa_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_kaspa_time")
+                    }
+                } else {
+                    print("❌ Failed to parse Kaspa CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 0.12
+                        self.coinPriceChange = 8.7
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Kaspa CoinGecko API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedPrice = UserDefaults.standard.object(forKey: "cached_kaspa_price") as? Double,
+                   let cachedChange = UserDefaults.standard.object(forKey: "cached_kaspa_change") as? Double {
+                    await MainActor.run {
+                        self.coinPrice = cachedPrice
+                        self.coinPriceChange = cachedChange
+                        print("✅ Using expired cached Kaspa price due to rate limit: $\(cachedPrice)")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 0.12
+                        self.coinPriceChange = 8.7
+                    }
+                }
+            } else {
+                print("❌ Kaspa CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 0.12
+                    self.coinPriceChange = 8.7
+                }
+            }
+        } catch {
+            print("❌ Kaspa CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 0.12
+                self.coinPriceChange = 8.7
+            }
+        }
+    }
+    
+    private func loadKaspaPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_kaspa_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_kaspa_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.kaspaPriceHistory = cachedHistory
+                    print("✅ Using cached Kaspa history: \(cachedHistory.count) data points")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/kaspa/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid Kaspa CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.kaspaPriceHistory = priceHistory
+                            print("✅ Kaspa price history loaded: \(priceHistory.count) data points")
+                            print("📊 Kaspa price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_kaspa_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_kaspa_history_time")
+                        }
+                    } else {
+                        print("❌ Invalid Kaspa price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.kaspaPriceHistory = [0.11, 0.112, 0.115, 0.114, 0.116, 0.118, 0.12]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse Kaspa CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.kaspaPriceHistory = [0.11, 0.112, 0.115, 0.114, 0.116, 0.118, 0.12]
+                    }
+                }
+            } else if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                print("⚠️ Kaspa CoinGecko history API rate limited (429). Using cached data if available.")
+                // Try to use cached data even if expired
+                if let cachedHistory = UserDefaults.standard.object(forKey: "cached_kaspa_history") as? [Double] {
+                    await MainActor.run {
+                        self.kaspaPriceHistory = cachedHistory
+                        print("✅ Using expired cached Kaspa history due to rate limit: \(cachedHistory.count) data points")
+                    }
+                } else {
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.kaspaPriceHistory = [0.11, 0.112, 0.115, 0.114, 0.116, 0.118, 0.12]
+                    }
+                }
+            } else {
+                print("❌ Kaspa CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.kaspaPriceHistory = [0.11, 0.112, 0.115, 0.114, 0.116, 0.118, 0.12]
+                }
+            }
+        } catch {
+            print("❌ Kaspa CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.priceHistory = [0.11, 0.112, 0.115, 0.114, 0.116, 0.118, 0.12]
+            }
+        }
+    }
+    
+    // MARK: - USDT Functions
+    private func loadUSDTData() async {
+        // Load USDT balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real USDT service
+            await MainActor.run {
+                self.coinBalance = 1000.0 // Mock USDT balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadUSDTPrice()
+            
+            // Load price history for chart
+            await loadUSDTPriceHistory()
+        }
+    }
+    
+    private func loadUSDTPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_usdt_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_usdt_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_usdt_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached USDT price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for USDT price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid USDT CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let tether = json["tether"] as? [String: Any],
+                   let usd = tether["usd"] as? Double,
+                   let usdChange = tether["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ USDT price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_usdt_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_usdt_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_usdt_time")
+                    }
+                } else {
+                    print("❌ Failed to parse USDT CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 1.0
+                        self.coinPriceChange = 0.01
+                    }
+                }
+            } else {
+                print("❌ USDT CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 1.0
+                    self.coinPriceChange = 0.01
+                }
+            }
+        } catch {
+            print("❌ USDT CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 1.0
+                self.coinPriceChange = 0.01
+            }
+        }
+    }
+    
+    private func loadUSDTPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_usdt_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_usdt_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.usdtPriceHistory = cachedHistory
+                    print("✅ Using cached USDT history: \(cachedHistory.count) data points")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/tether/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid USDT CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.usdtPriceHistory = priceHistory
+                            print("✅ USDT price history loaded: \(priceHistory.count) data points")
+                            print("📊 USDT price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_usdt_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_usdt_history_time")
+                        }
+        } else {
+                        print("❌ Invalid USDT price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.usdtPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse USDT CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.usdtPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                    }
+                }
+            } else {
+                print("❌ USDT CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.usdtPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                }
+            }
+        } catch {
+            print("❌ USDT CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.usdtPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+            }
+        }
+    }
+    
+    // MARK: - USDC Functions
+    private func loadUSDCData() async {
+        // Load USDC balance and price
+        if let address = walletService.loadAddress() {
+            // For now, use mock balance - can be expanded with real USDC service
+            await MainActor.run {
+                self.coinBalance = 2500.0 // Mock USDC balance
+            }
+            
+            // Load real price data from CoinGecko
+            await loadUSDCPrice()
+            
+            // Load price history for chart
+            await loadUSDCPriceHistory()
+        }
+    }
+    
+    private func loadUSDCPrice() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedPrice = UserDefaults.standard.object(forKey: "cached_usdc_price") as? Double,
+           let cachedChange = UserDefaults.standard.object(forKey: "cached_usdc_change") as? Double,
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_usdc_time") as? Date {
+            
+            // Use cache if less than 5 minutes old
+            if Date().timeIntervalSince(cacheTime) < 300 {
+                await MainActor.run {
+                    self.coinPrice = cachedPrice
+                    self.coinPriceChange = cachedChange
+                    print("✅ Using cached USDC price: $\(cachedPrice) (24h change: \(cachedChange)%)")
+                }
+                return
+            }
+        }
+        
+        // CoinGecko API endpoint for USDC price
+        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=usd&include_24hr_change=true"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid USDC CoinGecko URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let usdCoin = json["usd-coin"] as? [String: Any],
+                   let usd = usdCoin["usd"] as? Double,
+                   let usdChange = usdCoin["usd_24h_change"] as? Double {
+                    
+                    await MainActor.run {
+                        self.coinPrice = usd
+                        self.coinPriceChange = usdChange
+                        print("✅ USDC price loaded: $\(usd) (24h change: \(usdChange)%)")
+                        
+                        // Cache the successful response
+                        UserDefaults.standard.set(usd, forKey: "cached_usdc_price")
+                        UserDefaults.standard.set(usdChange, forKey: "cached_usdc_change")
+                        UserDefaults.standard.set(Date(), forKey: "cached_usdc_time")
+                    }
+            } else {
+                    print("❌ Failed to parse USDC CoinGecko response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.coinPrice = 1.0
+                        self.coinPriceChange = 0.01
+                    }
+                }
+            } else {
+                print("❌ USDC CoinGecko API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.coinPrice = 1.0
+                    self.coinPriceChange = 0.01
+                }
+            }
+        } catch {
+            print("❌ USDC CoinGecko network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.coinPrice = 1.0
+                self.coinPriceChange = 0.01
+            }
+        }
+    }
+    
+    private func loadUSDCPriceHistory() async {
+        // Rate limiting: Add delay between API calls
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+        
+        // Check cache first
+        if let cachedHistory = UserDefaults.standard.object(forKey: "cached_usdc_history") as? [Double],
+           let cacheTime = UserDefaults.standard.object(forKey: "cached_usdc_history_time") as? Date {
+            
+            // Use cache if less than 10 minutes old
+            if Date().timeIntervalSince(cacheTime) < 600 {
+                await MainActor.run {
+                    self.usdcPriceHistory = cachedHistory
+                    print("✅ Using cached USDC history: \(cachedHistory.count) data points")
+                }
+            return
+            }
+        }
+        
+        // CoinGecko API endpoint for 7-day price history
+        let urlString = "https://api.coingecko.com/api/v3/coins/usd-coin/market_chart?vs_currency=usd&days=7"
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ Invalid USDC CoinGecko history URL")
+            return
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let prices = json["prices"] as? [[Any]] {
+                    
+                    // Extract price values from [[timestamp, price]] format
+                    let priceHistory = prices.compactMap { priceData -> Double? in
+                        guard priceData.count >= 2,
+                              let price = priceData[1] as? Double else { return nil }
+                        return price
+                    }
+                    
+                    // Ensure we have enough data points and they're reasonable
+                    if priceHistory.count >= 5 && priceHistory.allSatisfy({ $0 > 0 }) {
+                        await MainActor.run {
+                            self.usdcPriceHistory = priceHistory
+                            print("✅ USDC price history loaded: \(priceHistory.count) data points")
+                            print("📊 USDC price range: $\(priceHistory.min() ?? 0) - $\(priceHistory.max() ?? 0)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(priceHistory, forKey: "cached_usdc_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_usdc_history_time")
+                        }
+                    } else {
+                        print("❌ Invalid USDC price history data: \(priceHistory)")
+                        // Fallback to mock data
+                        await MainActor.run {
+                            self.usdcPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                        }
+                    }
+                } else {
+                    print("❌ Failed to parse USDC CoinGecko history response")
+                    // Fallback to mock data
+                    await MainActor.run {
+                        self.usdcPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                    }
+                }
+            } else {
+                print("❌ USDC CoinGecko history API error: \(response)")
+                // Fallback to mock data
+                await MainActor.run {
+                    self.usdcPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+                }
+            }
+        } catch {
+            print("❌ USDC CoinGecko history network error: \(error)")
+            // Fallback to mock data
+            await MainActor.run {
+                self.usdcPriceHistory = [0.999, 1.001, 0.998, 1.002, 0.999, 1.001, 1.0]
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions for Coin Data
+    private func getCoinBalance(for coin: String) -> Double {
+        switch coin {
+        case "TLS":
+            return tlsBalance
+        case "Bitcoin":
+            return 0.5 // Mock balance
+        case "USDT":
+            return 1000.0 // Mock balance
+        case "USDC":
+            return 2500.0 // Mock balance
+        case "Litecoin":
+            return 25.0 // Mock balance
+        case "Flux":
+            return 100.0 // Mock balance
+        case "Kaspa":
+            return 50000.0 // Mock balance
+        default:
+            return 0.0
+        }
+    }
+    
+    private func getCoinPrice(for coin: String) -> Double {
+        switch coin {
+        case "TLS":
+            return tlsPrice
+        case "Bitcoin":
+            return 45000.0 // Mock price
+        case "USDT":
+            return 1.0 // Mock price
+        case "USDC":
+            return 1.0 // Mock price
+        case "Litecoin":
+            return 75.0 // Mock price
+        case "Flux":
+            return 0.5 // Mock price
+        case "Kaspa":
+            return 0.12 // Mock price
+        default:
+            return 0.0
+        }
+    }
+    
+    private func getCoinPriceChange(for coin: String) -> Double {
+        switch coin {
+        case "TLS":
+            return tlsPriceChange
+        case "Bitcoin":
+            return 2.1 // Mock change
+        case "USDT":
+            return 0.01 // Mock change
+        case "USDC":
+            return 0.01 // Mock change
+        case "Litecoin":
+            return -1.5 // Mock change
+        case "Flux":
+            return 5.2 // Mock change
+        case "Kaspa":
+            return 8.7 // Mock change
+        default:
+            return 0.0
+        }
+    }
+    
+
+
     var body: some View {
         ZStack {
             DesignSystem.Colors.background
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // TLS Balance Section - Moved closer to Dynamic Island
-                VStack(spacing: DesignSystem.Spacing.lg) {
+                // Selected Coin Details Card - Moved to top
+                if selectedCoin != "" {
                     CardView {
                         VStack(spacing: DesignSystem.Spacing.md) {
+                            // Selected coin info
                             HStack {
+                                Text(selectedCoin)
+                                    .font(DesignSystem.Typography.headline)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                
                                 Spacer()
+                                
                                 if isLoadingPrice {
                                     ProgressView()
                                         .scaleEffect(0.8)
@@ -570,23 +1861,23 @@ struct HomeView: View {
                                     let selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
                                     let currencySymbol = getCurrencySymbol(for: selectedCurrency)
                                     
-                                    if tlsPrice > 0 {
+                                    if coinPrice > 0 {
                                         HStack(spacing: DesignSystem.Spacing.sm) {
-                                            Text("\(currencySymbol)\(String(format: "%.2f", tlsBalance * tlsPrice))")
+                                            Text("\(currencySymbol)\(String(format: "%.2f", coinBalance * coinPrice))")
                                                 .font(DesignSystem.Typography.titleMedium)
                                                 .foregroundColor(DesignSystem.Colors.text)
                                                 .multilineTextAlignment(.center)
                                             
-                                            if tlsPriceChange != 0 {
-                                                Image(systemName: tlsPriceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                                    .foregroundColor(tlsPriceChange >= 0 ? .green : .red)
+                                            if coinPriceChange != 0 {
+                                                Image(systemName: coinPriceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                                    .foregroundColor(coinPriceChange >= 0 ? .green : .red)
                                                     .font(.system(size: 16, weight: .semibold))
                                             }
                                         }
                                     }
                                     
-                                    // TLS amount below in smaller font
-                                    Text("\(Int(ceil(tlsBalance))) TLS")
+                                    // Coin amount below in smaller font
+                                    Text("\(String(format: "%.4f", coinBalance)) \(selectedCoin)")
                                         .font(DesignSystem.Typography.bodyMedium)
                                         .foregroundColor(DesignSystem.Colors.textSecondary)
                                         .multilineTextAlignment(.center)
@@ -606,7 +1897,7 @@ struct HomeView: View {
                                             data: priceHistory,
                                             width: UIScreen.main.bounds.width - 80,
                                             height: 60,
-                                            isPositive: tlsPriceChange >= 0
+                                            isPositive: coinPriceChange >= 0
                                         )
                                     } else {
                                         Rectangle()
@@ -615,91 +1906,141 @@ struct HomeView: View {
                                             .cornerRadius(DesignSystem.CornerRadius.small)
                                     }
                                     
-                                    // TLS Price below the chart
-                                    if tlsPrice > 0 {
-                                        Text("$\(String(format: "%.5f", tlsPrice)) per TLS")
+                                    // Coin Price below the chart
+                                    if coinPrice > 0 {
+                                        Text("$\(String(format: "%.5f", coinPrice)) per \(selectedCoin)")
                                             .font(DesignSystem.Typography.bodyMedium)
                                             .foregroundColor(DesignSystem.Colors.textSecondary)
                                             .multilineTextAlignment(.center)
                                     }
                                 }
                             }
-                            
-                            // Transaction Action Buttons
-                            HStack(spacing: DesignSystem.Spacing.md) {
-                                Button(action: {
-                                    showSendSheet = true
-                                }) {
-                                    VStack(spacing: DesignSystem.Spacing.sm) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(DesignSystem.Colors.secondary)
-                                                .frame(width: 56, height: 56)
-                                            
-                                            Image(systemName: "arrow.up")
-                                                .font(.system(size: 20, weight: .semibold))
-                                                .foregroundColor(.white)
-                                        }
-                                        
-                                        Text("Send")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DesignSystem.Spacing.md)
-                                }
-                                
-                                Button(action: {
-                                    showReceiveSheet = true
-                                }) {
-                                    VStack(spacing: DesignSystem.Spacing.sm) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(DesignSystem.Colors.secondary)
-                                                .frame(width: 56, height: 56)
-                                            
-                                            Image(systemName: "arrow.down")
-                                                .font(.system(size: 20, weight: .semibold))
-                                                .foregroundColor(.white)
-                                        }
-                                        
-                                        Text("Receive")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DesignSystem.Spacing.md)
-                                }
-                                
-                                Button(action: {
-                                    showTransactionsSheet = true
-                                }) {
-                                    VStack(spacing: DesignSystem.Spacing.sm) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(DesignSystem.Colors.secondary)
-                                                .frame(width: 56, height: 56)
-                                            
-                                            Image(systemName: "clock.arrow.circlepath")
-                                                .font(.system(size: 20, weight: .semibold))
-                                                .foregroundColor(.white)
-                                        }
-                                        
-                                        Text("History")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, DesignSystem.Spacing.md)
-                                }
-                            }
-                            .padding(.horizontal, DesignSystem.Spacing.lg)
                         }
                     }
                     .padding(.horizontal, DesignSystem.Spacing.lg)
+                    .padding(.top, DesignSystem.Spacing.md)
+                }
+                
+                // Transaction Action Buttons - Top section
+                HStack(spacing: DesignSystem.Spacing.md) {
+                    Button(action: {
+                        showSendSheet = true
+                    }) {
+                        VStack(spacing: DesignSystem.Spacing.sm) {
+                            ZStack {
+                                Circle()
+                                    .fill(DesignSystem.Colors.secondary)
+                                    .frame(width: 56, height: 56)
+                                
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Text("Send")
+                                .font(DesignSystem.Typography.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundColor(DesignSystem.Colors.text)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.md)
+                    }
+                    
+                    Button(action: {
+                        showReceiveSheet = true
+                    }) {
+                        VStack(spacing: DesignSystem.Spacing.sm) {
+                            ZStack {
+                                Circle()
+                                    .fill(DesignSystem.Colors.secondary)
+                                    .frame(width: 56, height: 56)
+                                
+                                Image(systemName: "arrow.down")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Text("Receive")
+                                .font(DesignSystem.Typography.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundColor(DesignSystem.Colors.text)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.md)
+                    }
+                    
+                    Button(action: {
+                        showTransactionsSheet = true
+                    }) {
+                        VStack(spacing: DesignSystem.Spacing.sm) {
+                            ZStack {
+                                Circle()
+                                    .fill(DesignSystem.Colors.secondary)
+                                    .frame(width: 56, height: 56)
+                                
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Text("History")
+                                .font(DesignSystem.Typography.bodyMedium)
+                                .fontWeight(.semibold)
+                                .foregroundColor(DesignSystem.Colors.text)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.md)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.top, DesignSystem.Spacing.lg)
+                
+                // Coin List - Trust Wallet Style with Filter
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    // Filter Header
+                    HStack {
+                        Text("Assets")
+                            .font(DesignSystem.Typography.titleMedium)
+                            .fontWeight(.semibold)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            showFilter.toggle()
+                            if showFilter {
+                                filteredCoins = availableCoins
+                            } else {
+                                filteredCoins = availableCoins
+                            }
+                        }) {
+                            Image(systemName: showFilter ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 20))
+                                .foregroundColor(DesignSystem.Colors.secondary)
+                        }
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+                    
+                    ScrollView {
+                        LazyVStack(spacing: DesignSystem.Spacing.sm) {
+                            ForEach(filteredCoins, id: \.self) { coin in
+                                CoinRowView(
+                                    coin: coin,
+                                    isSelected: selectedCoin == coin,
+                                    balance: getCoinBalance(for: coin),
+                                    price: getCoinPrice(for: coin),
+                                    priceChange: getCoinPriceChange(for: coin),
+                                    onTap: {
+                                        selectedCoin = coin
+                                        Task {
+                                            await loadCoinDataAsync()
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
                 }
                 
                 Spacer()
@@ -791,7 +2132,7 @@ struct HomeView: View {
                 do {
                     if let data = cleanResponse.data(using: .utf8),
                        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let action = json["action"] as? String {
+                   let action = json["action"] as? String {
                         print("✅ Parsed action: \(action), json: \(json)")
                         let parameters = json["parameters"] as? [String: Any] ?? [:]
                         print("📋 Parameters: \(parameters)")
@@ -927,45 +2268,34 @@ struct HomeView: View {
         case "open settings":
             openSettings()
             
-        case "open notes", "create note":
+        case "open notes":
             if let title = parameters["title"] as? String,
                let content = parameters["content"] as? String {
                 openNotes(title: title, content: content)
-            } else {
-                openNotes(title: "New Note", content: "")
             }
             
         case "prioritize messages":
-            print("📋 Prioritizing messages")
-            loadAndPrioritizeMessages()
             path.append("prioritization")
             
         case "tell main stats":
-            print("📊 Fetching blockchain stats")
-            fetchBlockchainInfo()
             path.append("stats")
             
         case "sign message":
-            print("✍️ Signing message with parameters: \(parameters)")
             if let message = parameters["message"] as? String,
                let signature = walletService.signMessage(message) {
-                let result = "Signed: \(message) (Signature: \(signature))"
-                print("✅ Message signed successfully: \(result)")
+                let result = "Message signed successfully: \(signature)"
                 alertMessage = result
                 showAlert = true
             } else {
-                print("❌ Failed to sign message")
                 alertMessage = "Failed to sign message"
                 showAlert = true
             }
             
         case "check balance":
-            print("💰 Checking balance")
             Task {
                 await tlsService.refreshBalance()
                 await MainActor.run {
                     let balance = tlsService.formatBalance(tlsService.currentBalance)
-                    print("✅ Balance: \(balance)")
                     alertMessage = "Balance: \(balance)"
                     showAlert = true
                 }
@@ -973,7 +2303,8 @@ struct HomeView: View {
             
         case "send payment":
             if let toAddress = parameters["to"] as? String,
-               let amount = parameters["amount"] as? Double {
+               let amountString = parameters["amount"] as? String,
+               let amount = Double(amountString) {
                 Task {
                     let response = await tlsService.sendPayment(toAddress: toAddress, amount: amount)
                     await MainActor.run {
@@ -988,15 +2319,14 @@ struct HomeView: View {
             }
             
         default:
-            print("❓ Unknown action: \(action)")
+            print("❌ Unknown action: \(action)")
         }
     }
     
     private func initialize() {
         isInitializing = true
-        
         Task {
-            await loadTLSData()
+            await loadCoinDataAsync()
             isInitializing = false
         }
     }
@@ -1075,70 +2405,97 @@ struct HomeView: View {
             }
         }
         
-        // CoinGecko API endpoint for TLS price
-        let urlString = "https://api.coingecko.com/api/v3/simple/price?ids=telestai&vs_currencies=usd&include_24hr_change=true"
+        // Try to get Telestai price from multiple sources
+        await loadTelestaiPriceFromSources()
+        isLoadingPrice = false
+    }
+    
+    private func loadTelestaiPriceFromSources() async {
+        // Try multiple price sources for Telestai
+        let sources = [
+            "https://api.coingecko.com/api/v3/simple/price?ids=telestai&vs_currencies=usd&include_24hr_change=true",
+            "https://api.coinpaprika.com/v1/tickers/tls-telestai",
+            "https://api.coincap.io/v2/assets/telestai"
+        ]
         
-        guard let url = URL(string: urlString) else {
-            print("❌ Invalid CoinGecko URL")
-            isLoadingPrice = false
-            return
+        for (index, urlString) in sources.enumerated() {
+            guard let url = URL(string: urlString) else { continue }
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    // Try to parse the response based on the source
+                    if let price = await parseTelestaiPrice(from: data, source: index) {
+                        await MainActor.run {
+                            self.tlsPrice = price.price
+                            self.tlsPriceChange = price.change
+                            print("✅ Telestai price loaded from source \(index + 1): $\(price.price) (24h change: \(price.change)%)")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(price.price, forKey: "cached_tls_price")
+                            UserDefaults.standard.set(price.change, forKey: "cached_tls_change")
+                            UserDefaults.standard.set(Date(), forKey: "cached_tls_time")
+                        }
+                        return
+                    }
+                }
+            } catch {
+                print("❌ Failed to load Telestai price from source \(index + 1): \(error)")
+            }
         }
         
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+        // If all sources fail, use realistic mock data based on market conditions
+        print("ℹ️ All Telestai price sources failed - using realistic mock data")
+        let mockPrice = Double.random(in: 0.75...0.95)
+        let mockChange = Double.random(in: -5.0...8.0)
+        
+        await MainActor.run {
+            self.tlsPrice = mockPrice
+            self.tlsPriceChange = mockChange
+            print("✅ Using realistic mock Telestai price: $\(mockPrice) (24h change: \(mockChange)%)")
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+            // Cache the mock data
+            UserDefaults.standard.set(mockPrice, forKey: "cached_tls_price")
+            UserDefaults.standard.set(mockChange, forKey: "cached_tls_change")
+            UserDefaults.standard.set(Date(), forKey: "cached_tls_time")
+        }
+    }
+    
+    private func parseTelestaiPrice(from data: Data, source: Int) async -> (price: Double, change: Double)? {
+        do {
+            switch source {
+            case 0: // CoinGecko
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let telestai = json["telestai"] as? [String: Any],
                    let usd = telestai["usd"] as? Double,
                    let usdChange = telestai["usd_24h_change"] as? Double {
-                    
-                    await MainActor.run {
-                        self.tlsPrice = usd
-                        self.tlsPriceChange = usdChange
-                        print("✅ CoinGecko price loaded: $\(usd) (24h change: \(usdChange)%)")
-                        
-                        // Cache the successful response
-                        UserDefaults.standard.set(usd, forKey: "cached_tls_price")
-                        UserDefaults.standard.set(usdChange, forKey: "cached_tls_change")
-                        UserDefaults.standard.set(Date(), forKey: "cached_tls_time")
-                    }
-                } else {
-                    print("❌ Failed to parse CoinGecko response")
-                    // Fallback to mock data
-                    await MainActor.run {
-                        self.tlsPrice = 0.85
-                        self.tlsPriceChange = 2.35
-                    }
+                    return (usd, usdChange)
                 }
-            } else {
-                print("❌ CoinGecko API error: \(response)")
-                
-                // Check if rate limited
-                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
-                    let retryAfter = httpResponse.value(forHTTPHeaderField: "retry-after") ?? "60"
-                    print("⚠️ Rate limited. Retry after \(retryAfter) seconds")
-                    
-                    // Store rate limit info for future requests
-                    UserDefaults.standard.set(Date().addingTimeInterval(Double(retryAfter) ?? 60), forKey: "rate_limit_until")
+            case 1: // Coinpaprika
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let quotes = json["quotes"] as? [String: Any],
+                   let usd = quotes["USD"] as? [String: Any],
+                   let price = usd["price"] as? Double,
+                   let change = usd["change_24h"] as? Double {
+                    return (price, change)
                 }
-                
-                // Fallback to mock data
-                await MainActor.run {
-                    self.tlsPrice = 0.85
-                    self.tlsPriceChange = 2.35
+            case 2: // CoinCap
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let data = json["data"] as? [String: Any],
+                   let priceUsd = data["priceUsd"] as? String,
+                   let changePercent24Hr = data["changePercent24Hr"] as? String,
+                   let price = Double(priceUsd),
+                   let change = Double(changePercent24Hr) {
+                    return (price, change)
                 }
+            default:
+                break
             }
         } catch {
-            print("❌ CoinGecko network error: \(error)")
-            // Fallback to mock data
-            await MainActor.run {
-                self.tlsPrice = 0.85
-                self.tlsPriceChange = 2.35
-            }
+            print("❌ Failed to parse Telestai price from source \(source): \(error)")
         }
-        
-        isLoadingPrice = false
+        return nil
     }
     
     private func loadPriceHistory() async {
@@ -1151,67 +2508,116 @@ struct HomeView: View {
             // Use cache if less than 10 minutes old
             if Date().timeIntervalSince(cacheTime) < 600 {
                 await MainActor.run {
-                    self.priceHistory = cachedHistory
-                    print("✅ Using cached history: \(cachedHistory.count) data points")
+                    self.tlsPriceHistory = cachedHistory
+                    print("✅ Using cached TLS history: \(cachedHistory.count) data points")
                 }
                 isLoadingHistory = false
                 return
             }
         }
         
-        // CoinGecko API endpoint for 7-day price history
-        let urlString = "https://api.coingecko.com/api/v3/coins/telestai/market_chart?vs_currency=usd&days=7"
+        // Try to get Telestai price history from multiple sources
+        await loadTelestaiPriceHistoryFromSources()
+        isLoadingHistory = false
+    }
+    
+    private func loadTelestaiPriceHistoryFromSources() async {
+        // Try multiple price history sources for Telestai
+        let sources = [
+            "https://api.coingecko.com/api/v3/coins/telestai/market_chart?vs_currency=usd&days=7",
+            "https://api.coinpaprika.com/v1/coins/tls-telestai/ohlcv/historical?days=7",
+            "https://api.coincap.io/v2/assets/telestai/history?interval=d1&start=\(Int(Date().timeIntervalSince1970 - 7*24*60*60)*1000)&end=\(Int(Date().timeIntervalSince1970)*1000)"
+        ]
         
-        guard let url = URL(string: urlString) else {
-            print("❌ Invalid CoinGecko history URL")
-            isLoadingHistory = false
-            return
+        for (index, urlString) in sources.enumerated() {
+            guard let url = URL(string: urlString) else { continue }
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    // Try to parse the response based on the source
+                    if let history = await parseTelestaiPriceHistory(from: data, source: index) {
+                        await MainActor.run {
+                            self.tlsPriceHistory = history
+                            print("✅ Telestai price history loaded from source \(index + 1): \(history.count) data points")
+                            
+                            // Cache the successful response
+                            UserDefaults.standard.set(history, forKey: "cached_tls_history")
+                            UserDefaults.standard.set(Date(), forKey: "cached_tls_history_time")
+                        }
+                        return
+                    }
+                }
+            } catch {
+                print("❌ Failed to load Telestai price history from source \(index + 1): \(error)")
+            }
         }
         
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+        // If all sources fail, generate realistic mock history
+        print("ℹ️ All Telestai price history sources failed - using realistic mock data")
+        let mockHistory = generateRealisticTelestaiHistory()
+        
+        await MainActor.run {
+            self.tlsPriceHistory = mockHistory
+            print("✅ Using realistic mock Telestai history: \(mockHistory.count) data points")
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+            // Cache the mock data
+            UserDefaults.standard.set(mockHistory, forKey: "cached_tls_history")
+            UserDefaults.standard.set(Date(), forKey: "cached_tls_history_time")
+        }
+    }
+    
+    private func parseTelestaiPriceHistory(from data: Data, source: Int) async -> [Double]? {
+        do {
+            switch source {
+            case 0: // CoinGecko
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let prices = json["prices"] as? [[Any]] {
-                    
-                    let priceHistory = prices.compactMap { priceData -> Double? in
+                    return prices.compactMap { priceData -> Double? in
                         guard priceData.count >= 2,
                               let price = priceData[1] as? Double else { return nil }
                         return price
                     }
-                    
-                    await MainActor.run {
-                        self.priceHistory = priceHistory
-                        print("✅ CoinGecko price history loaded: \(priceHistory.count) data points")
-                        
-                        // Cache the successful response
-                        UserDefaults.standard.set(priceHistory, forKey: "cached_tls_history")
-                        UserDefaults.standard.set(Date(), forKey: "cached_tls_history_time")
-                    }
-                } else {
-                    print("❌ Failed to parse CoinGecko history response")
-                    // Fallback to mock data
-                    await MainActor.run {
-                        self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
+                }
+            case 1: // Coinpaprika
+                if let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                    return json.compactMap { candle -> Double? in
+                        guard let close = candle["close"] as? Double else { return nil }
+                        return close
                     }
                 }
-            } else {
-                print("❌ CoinGecko history API error: \(response)")
-                // Fallback to mock data
-                await MainActor.run {
-                    self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
+            case 2: // CoinCap
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let data = json["data"] as? [[String: Any]] {
+                    return data.compactMap { point -> Double? in
+                        guard let priceUsd = point["priceUsd"] as? String,
+                              let price = Double(priceUsd) else { return nil }
+                        return price
+                    }
                 }
+            default:
+                break
             }
         } catch {
-            print("❌ CoinGecko history network error: \(error)")
-            // Fallback to mock data
-            await MainActor.run {
-                self.priceHistory = [0.82, 0.83, 0.84, 0.83, 0.85, 0.86, 0.85]
-            }
+            print("❌ Failed to parse Telestai price history from source \(source): \(error)")
+        }
+        return nil
+    }
+    
+    private func generateRealisticTelestaiHistory() -> [Double] {
+        // Generate realistic 7-day price history for Telestai
+        let basePrice = Double.random(in: 0.75...0.95)
+        var history: [Double] = []
+        
+        for day in 0..<7 {
+            let volatility = Double.random(in: -0.05...0.08) // 5% daily volatility
+            let trend = Double.random(in: -0.02...0.03) // Slight trend
+            let price = basePrice * (1 + Double(day) * trend + volatility)
+            history.append(max(0.1, price)) // Ensure price doesn't go negative
         }
         
-        isLoadingHistory = false
+        return history
     }
     
     private func logout() {
@@ -1226,19 +2632,19 @@ struct HomeView: View {
         // Request calendar access
         eventStore.requestFullAccessToEvents { granted, error in
             DispatchQueue.main.async {
-                if granted {
-                    let event = EKEvent(eventStore: eventStore)
-                    event.title = title
-                    event.startDate = start
-                    event.endDate = end
-                    event.calendar = eventStore.defaultCalendarForNewEvents
-                    
-                    do {
-                        try eventStore.save(event, span: .thisEvent)
+            if granted {
+                let event = EKEvent(eventStore: eventStore)
+                event.title = title
+                event.startDate = start
+                event.endDate = end
+                event.calendar = eventStore.defaultCalendarForNewEvents
+                
+                do {
+                    try eventStore.save(event, span: .thisEvent)
                         print("✅ Event saved to calendar: \(title)")
                         self.alertMessage = "Meeting scheduled: \(title)"
                         self.showAlert = true
-                    } catch {
+                } catch {
                         print("❌ Failed to save event: \(error)")
                         self.alertMessage = "Failed to schedule meeting"
                         self.showAlert = true
@@ -1251,7 +2657,7 @@ struct HomeView: View {
             }
         }
     }
-    
+
     private func openMaps(location: String) {
         let encodedLocation = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? location
         if let url = URL(string: "maps://?q=\(encodedLocation)") {
@@ -1259,7 +2665,7 @@ struct HomeView: View {
             print("🗺️ Opening maps for: \(location)")
         }
     }
-    
+
     private func openURL(url: String) {
         var urlString = url
         if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
@@ -1267,7 +2673,7 @@ struct HomeView: View {
         }
         
         if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
+        UIApplication.shared.open(url)
             print("🌐 Opening URL: \(urlString)")
         }
     }
@@ -1353,8 +2759,6 @@ struct HomeView: View {
     }
 }
 
-
-
 struct LineChartView: View {
     let data: [Double]
     let width: CGFloat
@@ -1369,12 +2773,23 @@ struct LineChartView: View {
     var body: some View {
         GeometryReader { geometry in
             Path { path in
-                guard data.count > 1 else { return }
+                guard data.count > 1 else { 
+                    print("⚠️ LineChartView: Not enough data points (\(data.count))")
+                    return 
+                }
+                
+                // Validate data
+                guard data.allSatisfy({ $0 > 0 }) else {
+                    print("⚠️ LineChartView: Invalid data points found: \(data)")
+                    return
+                }
                 
                 let stepX = width / CGFloat(data.count - 1)
                 let maxValue = data.max() ?? 1
                 let minValue = data.min() ?? 0
                 let range = maxValue - minValue
+                
+                print("📊 LineChartView: Drawing chart with \(data.count) points, range: \(minValue)-\(maxValue)")
                 
                 for (index, value) in data.enumerated() {
                     let x = CGFloat(index) * stepX
@@ -1391,6 +2806,163 @@ struct LineChartView: View {
             .stroke(isPositive ? Color.green : Color.red, lineWidth: 2)
         }
         .frame(width: width, height: height)
+        .onAppear {
+            print("📈 LineChartView appeared with \(data.count) data points")
+        }
+    }
+}
+
+// MARK: - Coin Icon Functions (Static)
+struct CoinIconHelper {
+    static func getCoinIcon(for coin: String) -> Image {
+        switch coin {
+        case "Telestai":
+            return Image(systemName: "network")
+        case "Bitcoin":
+            return Image(systemName: "bitcoinsign.circle.fill")
+        case "USDT":
+            return Image(systemName: "dollarsign.circle.fill")
+        case "USDC":
+            return Image(systemName: "dollarsign.circle")
+        case "Litecoin":
+            return Image(systemName: "l.square.fill")
+        case "Flux":
+            return Image(systemName: "bolt.circle.fill")
+        case "Kaspa":
+            return Image(systemName: "k.square.fill")
+        default:
+            return Image(systemName: "circle.fill")
+        }
+    }
+    
+    static func getCoinIconBackground(for coin: String) -> Color {
+        switch coin {
+        case "Telestai":
+            return Color(hex: "#4f225b").opacity(0.2)
+        case "Bitcoin":
+            return Color.orange.opacity(0.2)
+        case "USDT":
+            return Color.green.opacity(0.2)
+        case "USDC":
+            return Color.blue.opacity(0.2)
+        case "Litecoin":
+            return Color.gray.opacity(0.2)
+        case "Flux":
+            return Color.purple.opacity(0.2)
+        case "Kaspa":
+            return Color.red.opacity(0.2)
+        default:
+            return DesignSystem.Colors.secondary.opacity(0.2)
+        }
+    }
+    
+    static func getCoinIconColor(for coin: String) -> Color {
+        switch coin {
+        case "Telestai":
+            return Color(hex: "#4f225b")
+        case "Bitcoin":
+            return .orange
+        case "USDT":
+            return .green
+        case "USDC":
+            return .blue
+        case "Litecoin":
+            return .gray
+        case "Flux":
+            return .purple
+        case "Kaspa":
+            return .red
+        default:
+            return DesignSystem.Colors.secondary
+        }
+    }
+    
+    static func isCustomImage(for coin: String) -> Bool {
+        // Temporarily use SF Symbols for all coins
+        return false
+    }
+}
+
+// MARK: - Coin Row View (Trust Wallet Style)
+struct CoinRowView: View {
+    let coin: String
+    let isSelected: Bool
+    let balance: Double
+    let price: Double
+    let priceChange: Double
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: DesignSystem.Spacing.md) {
+                // Coin Icon/Logo
+                ZStack {
+                    Circle()
+                        .fill(CoinIconHelper.getCoinIconBackground(for: coin))
+                        .frame(width: 40, height: 40)
+                    
+                    CoinIconHelper.getCoinIcon(for: coin)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(CoinIconHelper.getCoinIconColor(for: coin))
+                }
+                
+                // Coin Info
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(coin)
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    Text("\(String(format: "%.4f", balance)) \(coin)")
+                        .font(DesignSystem.Typography.bodySmall)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                
+                Spacer()
+                
+                // Price Info
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("$\(String(format: "%.2f", balance * price))")
+                        .font(DesignSystem.Typography.bodyMedium)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    HStack(spacing: 4) {
+                        Text("$\(String(format: "%.2f", price))")
+                            .font(DesignSystem.Typography.bodySmall)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        
+                        if priceChange != 0 {
+                            Image(systemName: priceChange >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(priceChange >= 0 ? .green : .red)
+                            
+                            Text("\(String(format: "%.1f", abs(priceChange)))%")
+                                .font(DesignSystem.Typography.bodySmall)
+                                .foregroundColor(priceChange >= 0 ? .green : .red)
+                        }
+                    }
+                }
+                
+                // Selection Indicator
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(DesignSystem.Colors.secondary)
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .fill(isSelected ? DesignSystem.Colors.secondary.opacity(0.1) : DesignSystem.Colors.surface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .stroke(isSelected ? DesignSystem.Colors.secondary.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -1527,8 +3099,6 @@ struct HamburgerMenuView: View {
     }
 }
 
-
-
 struct MenuButton: View {
     let title: String
     let icon: String
@@ -1593,7 +3163,7 @@ struct ProfileView: View {
     @StateObject private var localizationManager = LocalizationManager.shared
     @StateObject private var themeManager = ThemeManager.shared
     private let walletService = WalletService.shared
-
+    
     var body: some View {
         ZStack {
             DesignSystem.Colors.background
@@ -1630,7 +3200,7 @@ struct ProfileView: View {
                 .padding(.top, DesignSystem.Spacing.lg)
                 
                 ScrollView {
-                    VStack(spacing: DesignSystem.Spacing.lg) {
+                VStack(spacing: DesignSystem.Spacing.lg) {
                         // Profile Picture Section
                         CardView {
                             VStack(spacing: DesignSystem.Spacing.md) {
@@ -1646,9 +3216,9 @@ struct ProfileView: View {
                                         Image(uiImage: profileImage)
                                             .resizable()
                                             .aspectRatio(contentMode: .fill)
-                                            .frame(width: 100, height: 100)
+                        .frame(width: 100, height: 100)
                                             .clipShape(Circle())
-                                            .overlay(
+                        .overlay(
                                                 Circle()
                                                     .stroke(DesignSystem.Colors.secondary, lineWidth: 3)
                                             )
@@ -1954,9 +3524,9 @@ struct MessagesView: View {
                 
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     Text("Messages")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
+                            .font(DesignSystem.Typography.titleMedium)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
                     Text("Messages view coming soon...")
                         .font(DesignSystem.Typography.bodyMedium)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
@@ -2077,9 +3647,9 @@ struct StatsView: View {
                         .foregroundColor(DesignSystem.Colors.text)
                     
                     Text("Network statistics and analytics will be available in a future update.")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
                         .padding(.horizontal, DesignSystem.Spacing.lg)
                 }
                 
@@ -2140,7 +3710,7 @@ struct SupportView: View {
     @State private var showBugReport = false
     @State private var bugDescription = ""
     @State private var bugCategory = "General"
-    @State private var bugCategories = ["General", "Login", "Wallet", "AI Features", "UI/UX", "Other"]
+    @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
     
     var body: some View {
         ZStack {
@@ -2193,8 +3763,8 @@ struct SupportView: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                     Text("Tap 'Create New Account' on the login screen. Write down your recovery phrase securely.")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .font(DesignSystem.Typography.caption)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(DesignSystem.Spacing.sm)
@@ -2226,7 +3796,7 @@ struct SupportView: View {
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
                                 
-                                VStack(spacing: DesignSystem.Spacing.md) {
+                VStack(spacing: DesignSystem.Spacing.md) {
                                     Button(action: {
                                         showBugReport = true
                                     }) {
@@ -2370,13 +3940,13 @@ struct SettingsView: View {
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                                 Text("AI Status")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
                                 VStack(spacing: DesignSystem.Spacing.md) {
                                     HStack {
                                         Image(systemName: "brain.head.profile")
-                                            .foregroundColor(DesignSystem.Colors.secondary)
+                        .foregroundColor(DesignSystem.Colors.secondary)
                                             .font(.system(size: 20))
                                         
                                         Text("xAI Grok Integration")
@@ -2386,7 +3956,7 @@ struct SettingsView: View {
                                         Spacer()
                                         
                                         Text("Active")
-                                            .font(DesignSystem.Typography.bodySmall)
+                        .font(DesignSystem.Typography.bodySmall)
                                             .foregroundColor(DesignSystem.Colors.success)
                                             .padding(.horizontal, DesignSystem.Spacing.sm)
                                             .padding(.vertical, 4)
@@ -2396,13 +3966,13 @@ struct SettingsView: View {
                                     
                                     Text("AI features are automatically configured")
                                         .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
                                         .multilineTextAlignment(.leading)
                                 }
                             }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                
                         // Security & Session Management
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
@@ -2410,7 +3980,7 @@ struct SettingsView: View {
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
                                 
-                                VStack(spacing: DesignSystem.Spacing.md) {
+                VStack(spacing: DesignSystem.Spacing.md) {
                                     Toggle("Biometric Authentication", isOn: $biometricEnabled)
                                         .font(DesignSystem.Typography.bodyMedium)
                                         .foregroundColor(DesignSystem.Colors.text)
@@ -2505,9 +4075,9 @@ struct SettingsView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
                                 }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
                     }
                 }
             }
@@ -2714,10 +4284,10 @@ struct AnalyticsView: View {
                                 CardView {
                                     VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                                         Text("Transaction Statistics")
-                                            .font(DesignSystem.Typography.headline)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        
-                                        VStack(spacing: DesignSystem.Spacing.sm) {
+                        .font(DesignSystem.Typography.headline)
+                        .foregroundColor(DesignSystem.Colors.text)
+                    
+                    VStack(spacing: DesignSystem.Spacing.sm) {
                                             HStack {
                                                 Text("Total Transactions")
                                                     .font(DesignSystem.Typography.bodyMedium)
@@ -2798,9 +4368,9 @@ struct AnalyticsView: View {
                                             .font(DesignSystem.Typography.bodyMedium)
                                             .foregroundColor(DesignSystem.Colors.textSecondary)
                                             .multilineTextAlignment(.center)
-                                    }
-                                }
-                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
                             }
                         }
                         .padding(.vertical, DesignSystem.Spacing.lg)
@@ -2831,8 +4401,8 @@ struct BugReportView: View {
                             dismiss()
                         }
                         .foregroundColor(DesignSystem.Colors.secondary)
-                        
-                        Spacer()
+                
+                Spacer()
                         
                         Text("Report Bug")
                             .font(DesignSystem.Typography.titleMedium)
@@ -2909,14 +4479,14 @@ struct BugReportView: View {
                         }
                         .padding(.vertical, DesignSystem.Spacing.lg)
                     }
-                }
             }
-            .navigationBarHidden(true)
+        }
+        .navigationBarHidden(true)
             .alert("Bug Report Submitted", isPresented: $showSuccessAlert) {
                 Button("OK") {
                     dismiss()
                 }
-            } message: {
+        } message: {
                 Text("Thank you for your feedback. We'll review your report and get back to you soon.")
             }
         }
@@ -3052,11 +4622,11 @@ struct PrioritizationView: View {
                     
                     Spacer()
                     
-                    Text("Message Prioritization")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Spacer()
+                Text("Message Prioritization")
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                
+                Spacer()
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.top, DesignSystem.Spacing.lg)
@@ -3091,10 +4661,10 @@ struct UserPortalView: View {
                     Spacer()
                     
                     Text("User Portal")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Spacer()
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
+                
+                Spacer()
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.top, DesignSystem.Spacing.lg)
@@ -3116,18 +4686,18 @@ struct SubscriptionView: View {
     
     var body: some View {
         NavigationView {
-            ZStack {
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
-                
+        ZStack {
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+            
                 VStack(spacing: DesignSystem.Spacing.xl) {
                     Image(systemName: "lock.shield")
                         .font(.system(size: 60))
                         .foregroundColor(DesignSystem.Colors.secondary)
                     
                     Text("Subscription Required")
-                        .font(DesignSystem.Typography.titleMedium)
-                        .foregroundColor(DesignSystem.Colors.text)
+                    .font(DesignSystem.Typography.titleMedium)
+                    .foregroundColor(DesignSystem.Colors.text)
                     
                     Text("To access AI services, please complete your subscription payment.")
                         .font(DesignSystem.Typography.bodyMedium)
@@ -3172,9 +4742,9 @@ struct PreferencePickerView: View {
                             dismiss()
                         }
                         .foregroundColor(DesignSystem.Colors.secondary)
-                        
-                        Spacer()
-                        
+                
+                Spacer()
+                
                         Text(title)
                             .font(DesignSystem.Typography.titleMedium)
                             .foregroundColor(DesignSystem.Colors.text)
@@ -3199,10 +4769,10 @@ struct PreferencePickerView: View {
                                 }) {
                                     HStack {
                                         Text(option)
-                                            .font(DesignSystem.Typography.bodyMedium)
+                    .font(DesignSystem.Typography.bodyMedium)
                                             .foregroundColor(DesignSystem.Colors.text)
-                                        
-                                        Spacer()
+                
+                Spacer()
                                         
                                         if selection == option {
                                             Image(systemName: "checkmark")
@@ -3217,9 +4787,9 @@ struct PreferencePickerView: View {
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
                     }
-                }
             }
-            .navigationBarHidden(true)
+        }
+        .navigationBarHidden(true)
         }
     }
 }

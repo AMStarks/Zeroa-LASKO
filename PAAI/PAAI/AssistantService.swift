@@ -101,13 +101,13 @@ class AssistantService: ObservableObject {
                 webSocketTask?.send(.string(messageString)) { error in
                     if let error = error {
                         print("❌ WebSocket connection error: \(error)")
-                        DispatchQueue.main.async {
+                    DispatchQueue.main.async {
                             self.isStreaming = false
                             self.webSocketTask = nil
                             self.startMockStreaming()
                             completion(true)
                         }
-                    } else {
+                        } else {
                         print("✅ Connected to streaming service")
                         DispatchQueue.main.async {
                             self.isStreaming = true
@@ -226,7 +226,7 @@ class AssistantService: ObservableObject {
     
     func startListening(completion: @escaping (String?) -> Void) {
         print("🎤 Speech recognition disabled")
-        completion(nil)
+            completion(nil)
     }
     
     func stopListening() {

@@ -108,7 +108,7 @@ class MessagingService: ObservableObject {
         
         // Simulate connection delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            self.isConnected = true
+                        self.isConnected = true
             print("✅ Connected to local messaging service")
             self.loadMockData()
         }
@@ -342,7 +342,7 @@ class MessagingService: ObservableObject {
             // Update message status to sent
             if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
                 // Note: Since ChatMessage is immutable, we'd need to create a new instance
-                print("✅ Message sent successfully")
+                    print("✅ Message sent successfully")
             }
         }
     }

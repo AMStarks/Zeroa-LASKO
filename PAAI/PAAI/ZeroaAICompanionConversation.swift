@@ -10,7 +10,7 @@ struct CompanionMessage: Identifiable, Codable {
     let timestamp: Date
     let sender: MessageSender
     let messageType: MessageType
-    let context: [String: Any]?
+    let context: [String: String]?
     let emotionalContext: ConversationMemory.EmotionalContext?
     
     enum MessageSender: String, Codable {
@@ -211,19 +211,19 @@ struct CompanionConversationView: View {
         suggestions = newSuggestions
     }
     
-    private func buildContext() -> [String: Any] {
-        var context: [String: Any] = [:]
+    private func buildContext() -> [String: String] {
+        var context: [String: String] = [:]
         
         // Add current time
-        context["timestamp"] = Date()
+        context["timestamp"] = ISO8601DateFormatter().string(from: Date())
         
         // Add recent conversation context
         let recentMessages = messages.suffix(5)
-        context["recent_messages"] = recentMessages.map { $0.content }
+        context["recent_messages"] = recentMessages.map { $0.content }.joined(separator: " | ")
         
         // Add user preferences if available
         if let preferences = companionService.userPreferences {
-            context["user_preferences"] = preferences.preferredTopics
+            context["user_preferences"] = preferences.preferredTopics.joined(separator: ", ")
         }
         
         return context

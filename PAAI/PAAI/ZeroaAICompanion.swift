@@ -70,7 +70,7 @@ struct ConversationMemory: Codable {
     let timestamp: Date
     let userInput: String
     let companionResponse: String
-    let context: [String: Any]
+    let context: [String: String] // Changed from [String: Any] to [String: String] for Codable conformance
     let emotionalContext: EmotionalContext
     let actionTaken: String?
     let userFeedback: UserFeedback?
@@ -98,7 +98,7 @@ struct UserPreferences: Codable {
     let communicationStyle: CompanionPersonality.CommunicationStyle
     let responseLength: CompanionPersonality.ResponseLength
     let privacySettings: PrivacySettings
-    let learningData: LearningData
+    var learningData: LearningData
     
     struct PrivacySettings: Codable {
         let allowPersonalData: Bool
@@ -108,10 +108,10 @@ struct UserPreferences: Codable {
     }
     
     struct LearningData: Codable {
-        let interactionPatterns: [String: Int]
-        let preferredTimes: [String: Int]
-        let topicEngagement: [String: Double]
-        let responseEffectiveness: [String: Double]
+        var interactionPatterns: [String: Int]
+        var preferredTimes: [String: Int]
+        var topicEngagement: [String: Double]
+        var responseEffectiveness: [String: Double]
     }
 }
 
@@ -262,7 +262,7 @@ class ZeroaAICompanion: ObservableObject {
     
     /// Stores companion identity on TLS blockchain
     private func storeIdentityOnBlockchain(_ identity: CompanionIdentity, completion: @escaping (Bool) -> Void) {
-        let identityData = [
+        let identityData: [String: Any] = [
             "type": "companion_identity",
             "address": identity.blockchainAddress,
             "public_key": identity.publicKey,
@@ -329,7 +329,7 @@ class ZeroaAICompanion: ObservableObject {
     func addConversationMemory(
         userInput: String,
         companionResponse: String,
-        context: [String: Any] = [:],
+        context: [String: String] = [:],
         emotionalContext: ConversationMemory.EmotionalContext = .neutral,
         actionTaken: String? = nil,
         userFeedback: ConversationMemory.UserFeedback? = nil
@@ -394,7 +394,7 @@ class ZeroaAICompanion: ObservableObject {
     // MARK: - Response Generation
     
     /// Generates personalized response based on user input and context
-    func generateResponse(to input: String, context: [String: Any] = [:]) -> String {
+    func generateResponse(to input: String, context: [String: String] = [:]) -> String {
         guard let personality = currentPersonality else {
             return "I'm not properly configured yet. Please set up my personality first."
         }
@@ -422,7 +422,7 @@ class ZeroaAICompanion: ObservableObject {
     }
     
     /// Builds contextual input with user preferences and current state
-    private func buildContextualInput(input: String, context: [String: Any]) -> String {
+    private func buildContextualInput(input: String, context: [String: String]) -> String {
         var contextualInput = "User input: \(input)\n"
         
         if let preferences = userPreferences {
