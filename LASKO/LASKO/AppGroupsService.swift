@@ -192,8 +192,15 @@ class AppGroupsService {
                 print("❌ LASKO: Invalid LASKO auth response data from App Groups")
                 return nil
             }
+            // TTL enforcement for responses
+            let now = Int64(Date().timeIntervalSince1970)
+            if now > expiresAt {
+                print("❌ LASKO: LASKO auth response expired - clearing")
+                clearAuthResponse()
+                return nil
+            }
             
-            print("📥 LASKO: Retrieved LASKO auth response from App Groups for: \(tlsAddress)")
+            print("📥 LASKO: Retrieved LASKO auth response from App Groups for: \(tlsAddress.redactedAddress())")
             return LASKOAuthSession(
                 tlsAddress: tlsAddress,
                 sessionToken: sessionToken,

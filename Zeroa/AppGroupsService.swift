@@ -194,8 +194,15 @@ class AppGroupsService {
                 print("❌ Zeroa: Invalid LASKO auth response data from App Groups")
                 return nil
             }
+            // TTL enforcement for responses: ignore and clear expired entries
+            let now = Int64(Date().timeIntervalSince1970)
+            if now > expiresAt {
+                print("❌ Zeroa: LASKO auth response expired - clearing")
+                clearAuthResponse()
+                return nil
+            }
             
-            print("📥 Zeroa: Retrieved LASKO auth response from App Groups for: \(tlsAddress)")
+            print("📥 Zeroa: Retrieved LASKO auth response from App Groups for: \(tlsAddress.redactedAddress())")
             return LASKOAuthSession(
                 tlsAddress: tlsAddress,
                 sessionToken: sessionToken,
