@@ -1,0 +1,32 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserdatad/
+*.xcscmblueprint
+
+# CocoaPods
+Pods/
+
+# SwiftPM
+.swiftpm/
+.build/
+
+# App artifacts
+*.ipa
+*.dSYM
+
+# Large/local data
+Zeroa/Data/
+archive/
+cleanup_backup_*/
+**/*.mlpackage/
+**/*.onnx
+**/*.model
+**/*.weight
+*.zip
+*.db
+nova_conversations.db
+
+# Python caches
+__pycache__/
+*.pyc

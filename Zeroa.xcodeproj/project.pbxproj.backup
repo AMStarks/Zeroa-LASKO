@@ -1,0 +1,709 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1971529DCB47BF04A87C9199 /* Pods_ZeroaTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F24D79159E4F59C137CA892D /* Pods_ZeroaTests.framework */; };
+		84FDE9F52E2674140043C535 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9F42E2674140043C535 /* WebKit.framework */; };
+		84FDE9F92E26772E0043C535 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9F82E26772E0043C535 /* EventKit.framework */; };
+		84FDE9FB2E2677330043C535 /* MapKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9FA2E2677330043C535 /* MapKit.framework */; };
+		8ED1872FB6838B200029A923 /* Pods_ZeroaUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 159D2062020482D4B2EC4F32 /* Pods_ZeroaUITests.framework */; };
+		EF04A57AA0FE2D8BED75AEBB /* Pods_Zeroa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 48C35FCBB8515018247E7C52 /* Pods_Zeroa.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8449E2EF2E24974A00F03C18 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8449E2D92E24974900F03C18 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8449E2E02E24974900F03C18;
+			remoteInfo = Zeroa;
+		};
+		8449E2F92E24974A00F03C18 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8449E2D92E24974900F03C18 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8449E2E02E24974900F03C18;
+			remoteInfo = Zeroa;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		159D2062020482D4B2EC4F32 /* Pods_ZeroaUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ZeroaUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		165D4FA3EFE2181CAE46C1E3 /* Pods-Zeroa.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zeroa.debug.xcconfig"; path = "Target Support Files/Pods-Zeroa/Pods-Zeroa.debug.xcconfig"; sourceTree = "<group>"; };
+		48C35FCBB8515018247E7C52 /* Pods_Zeroa.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Zeroa.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A3F95ED246965D987071513 /* Pods-ZeroaTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaTests.debug.xcconfig"; path = "Target Support Files/Pods-ZeroaTests/Pods-ZeroaTests.debug.xcconfig"; sourceTree = "<group>"; };
+		50869DC485A687F2AFCCC3DD /* Pods-ZeroaUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaUITests.debug.xcconfig"; path = "Target Support Files/Pods-ZeroaUITests/Pods-ZeroaUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		6CBE8BF2FD8CF87539B392FC /* Pods-ZeroaTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaTests.release.xcconfig"; path = "Target Support Files/Pods-ZeroaTests/Pods-ZeroaTests.release.xcconfig"; sourceTree = "<group>"; };
+		6F8D8DA4C627DFE0C1C4C04F /* Pods-ZeroaUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaUITests.release.xcconfig"; path = "Target Support Files/Pods-ZeroaUITests/Pods-ZeroaUITests.release.xcconfig"; sourceTree = "<group>"; };
+		8449E2E12E24974900F03C18 /* Zeroa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zeroa.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8449E2EE2E24974A00F03C18 /* ZeroaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeroaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8449E2F82E24974A00F03C18 /* ZeroaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeroaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		84E0DA722E3F698C003BCEA2 /* Zeroa.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Zeroa.xcodeproj; sourceTree = "<group>"; };
+		84FDE9F42E2674140043C535 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		84FDE9F82E26772E0043C535 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
+		84FDE9FA2E2677330043C535 /* MapKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MapKit.framework; path = System/Library/Frameworks/MapKit.framework; sourceTree = SDKROOT; };
+		BE4A2A1473FF0E2EBAE452B3 /* Pods-Zeroa.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zeroa.release.xcconfig"; path = "Target Support Files/Pods-Zeroa/Pods-Zeroa.release.xcconfig"; sourceTree = "<group>"; };
+		F24D79159E4F59C137CA892D /* Pods_ZeroaTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ZeroaTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		8449E2E32E24974900F03C18 /* Zeroa */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = Zeroa;
+			sourceTree = "<group>";
+		};
+		8449E2F12E24974A00F03C18 /* ZeroaTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = ZeroaTests;
+			sourceTree = "<group>";
+		};
+		8449E2FB2E24974A00F03C18 /* ZeroaUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+			);
+			path = ZeroaUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8449E2DE2E24974900F03C18 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				84FDE9F92E26772E0043C535 /* EventKit.framework in Frameworks */,
+				84FDE9FB2E2677330043C535 /* MapKit.framework in Frameworks */,
+				84FDE9F52E2674140043C535 /* WebKit.framework in Frameworks */,
+				EF04A57AA0FE2D8BED75AEBB /* Pods_Zeroa.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2EB2E24974A00F03C18 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1971529DCB47BF04A87C9199 /* Pods_ZeroaTests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2F52E24974A00F03C18 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8ED1872FB6838B200029A923 /* Pods_ZeroaUITests.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5172CE0CAE4422CEBEA05044 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				165D4FA3EFE2181CAE46C1E3 /* Pods-Zeroa.debug.xcconfig */,
+				BE4A2A1473FF0E2EBAE452B3 /* Pods-Zeroa.release.xcconfig */,
+				4A3F95ED246965D987071513 /* Pods-ZeroaTests.debug.xcconfig */,
+				6CBE8BF2FD8CF87539B392FC /* Pods-ZeroaTests.release.xcconfig */,
+				50869DC485A687F2AFCCC3DD /* Pods-ZeroaUITests.debug.xcconfig */,
+				6F8D8DA4C627DFE0C1C4C04F /* Pods-ZeroaUITests.release.xcconfig */,
+			);
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		8449E2D82E24974900F03C18 = {
+			isa = PBXGroup;
+			children = (
+				8449E2E32E24974900F03C18 /* Zeroa */,
+				8449E2F12E24974A00F03C18 /* ZeroaTests */,
+				8449E2FB2E24974A00F03C18 /* ZeroaUITests */,
+				84FDE9F32E2674140043C535 /* Frameworks */,
+				8449E2E22E24974900F03C18 /* Products */,
+				5172CE0CAE4422CEBEA05044 /* Pods */,
+			);
+			sourceTree = "<group>";
+		};
+		8449E2E22E24974900F03C18 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8449E2E12E24974900F03C18 /* Zeroa.app */,
+				8449E2EE2E24974A00F03C18 /* ZeroaTests.xctest */,
+				8449E2F82E24974A00F03C18 /* ZeroaUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		84E0DA772E3F698C003BCEA2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		84FDE9F32E2674140043C535 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				84FDE9FA2E2677330043C535 /* MapKit.framework */,
+				84FDE9F82E26772E0043C535 /* EventKit.framework */,
+				84FDE9F42E2674140043C535 /* WebKit.framework */,
+				48C35FCBB8515018247E7C52 /* Pods_Zeroa.framework */,
+				F24D79159E4F59C137CA892D /* Pods_ZeroaTests.framework */,
+				159D2062020482D4B2EC4F32 /* Pods_ZeroaUITests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		8449E2E02E24974900F03C18 /* Zeroa */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8449E3022E24974A00F03C18 /* Build configuration list for PBXNativeTarget "Zeroa" */;
+			buildPhases = (
+				6E97714399D63EC2177888D1 /* [CP] Check Pods Manifest.lock */,
+				8449E2DD2E24974900F03C18 /* Sources */,
+				8449E2DE2E24974900F03C18 /* Frameworks */,
+				8449E2DF2E24974900F03C18 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				8449E2E32E24974900F03C18 /* Zeroa */,
+			);
+			name = Zeroa;
+			productName = Zeroa;
+			productReference = 8449E2E12E24974900F03C18 /* Zeroa.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8449E2ED2E24974A00F03C18 /* ZeroaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8449E3052E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaTests" */;
+			buildPhases = (
+				37205F6544E8CF2E72E2E55D /* [CP] Check Pods Manifest.lock */,
+				8449E2EA2E24974A00F03C18 /* Sources */,
+				8449E2EB2E24974A00F03C18 /* Frameworks */,
+				8449E2EC2E24974A00F03C18 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8449E2F02E24974A00F03C18 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8449E2F12E24974A00F03C18 /* ZeroaTests */,
+			);
+			name = ZeroaTests;
+			productName = ZeroaTests;
+			productReference = 8449E2EE2E24974A00F03C18 /* ZeroaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		8449E2F72E24974A00F03C18 /* ZeroaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8449E3082E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaUITests" */;
+			buildPhases = (
+				E53A1DF801C4A48AE5482157 /* [CP] Check Pods Manifest.lock */,
+				8449E2F42E24974A00F03C18 /* Sources */,
+				8449E2F52E24974A00F03C18 /* Frameworks */,
+				8449E2F62E24974A00F03C18 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8449E2FA2E24974A00F03C18 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8449E2FB2E24974A00F03C18 /* ZeroaUITests */,
+			);
+			name = ZeroaUITests;
+			productName = ZeroaUITests;
+			productReference = 8449E2F82E24974A00F03C18 /* ZeroaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8449E2D92E24974900F03C18 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					8449E2E02E24974900F03C18 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					8449E2ED2E24974A00F03C18 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 8449E2E02E24974900F03C18;
+					};
+					8449E2F72E24974A00F03C18 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 8449E2E02E24974900F03C18;
+					};
+				};
+			};
+			buildConfigurationList = 8449E2DC2E24974900F03C18 /* Build configuration list for PBXProject "Zeroa" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 8449E2D82E24974900F03C18;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 8449E2E22E24974900F03C18 /* Products */;
+			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 84E0DA772E3F698C003BCEA2 /* Products */;
+					ProjectRef = 84E0DA722E3F698C003BCEA2 /* Zeroa.xcodeproj */;
+				},
+			);
+			projectRoot = "";
+			targets = (
+				8449E2E02E24974900F03C18 /* Zeroa */,
+				8449E2ED2E24974A00F03C18 /* ZeroaTests */,
+				8449E2F72E24974A00F03C18 /* ZeroaUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8449E2DF2E24974900F03C18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2EC2E24974A00F03C18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2F62E24974A00F03C18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		37205F6544E8CF2E72E2E55D /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-ZeroaTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		6E97714399D63EC2177888D1 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Zeroa-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E53A1DF801C4A48AE5482157 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-ZeroaUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8449E2DD2E24974900F03C18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2EA2E24974A00F03C18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8449E2F42E24974A00F03C18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8449E2F02E24974A00F03C18 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8449E2E02E24974900F03C18 /* Zeroa */;
+			targetProxy = 8449E2EF2E24974A00F03C18 /* PBXContainerItemProxy */;
+		};
+		8449E2FA2E24974A00F03C18 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8449E2E02E24974900F03C18 /* Zeroa */;
+			targetProxy = 8449E2F92E24974A00F03C18 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		8449E3002E24974A00F03C18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8449E3012E24974A00F03C18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		8449E3032E24974A00F03C18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 165D4FA3EFE2181CAE46C1E3 /* Pods-Zeroa.debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5F2STVK9PF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.Zeroa;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		8449E3042E24974A00F03C18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = BE4A2A1473FF0E2EBAE452B3 /* Pods-Zeroa.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5F2STVK9PF;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.Zeroa;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8449E3062E24974A00F03C18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4A3F95ED246965D987071513 /* Pods-ZeroaTests.debug.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.ZeroaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeroa.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeroa";
+			};
+			name = Debug;
+		};
+		8449E3072E24974A00F03C18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6CBE8BF2FD8CF87539B392FC /* Pods-ZeroaTests.release.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.ZeroaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeroa.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeroa";
+			};
+			name = Release;
+		};
+		8449E3092E24974A00F03C18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50869DC485A687F2AFCCC3DD /* Pods-ZeroaUITests.debug.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.ZeroaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Zeroa;
+			};
+			name = Debug;
+		};
+		8449E30A2E24974A00F03C18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6F8D8DA4C627DFE0C1C4C04F /* Pods-ZeroaUITests.release.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.telestai.ZeroaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Zeroa;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		8449E2DC2E24974900F03C18 /* Build configuration list for PBXProject "Zeroa" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8449E3002E24974A00F03C18 /* Debug */,
+				8449E3012E24974A00F03C18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8449E3022E24974A00F03C18 /* Build configuration list for PBXNativeTarget "Zeroa" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8449E3032E24974A00F03C18 /* Debug */,
+				8449E3042E24974A00F03C18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8449E3052E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8449E3062E24974A00F03C18 /* Debug */,
+				8449E3072E24974A00F03C18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8449E3082E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8449E3092E24974A00F03C18 /* Debug */,
+				8449E30A2E24974A00F03C18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8449E2D92E24974900F03C18 /* Project object */;
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24.48 27.98">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #fff;
+      }
+
+      .cls-2 {
+        fill: #d95204;
+      }
+    </style>
+    <symbol id="L-icon" viewBox="0 0 24.48 27.98">
+      <g>
+        <polygon class="cls-2" points="4.85 2.21 0 5.85 2.73 25.49 20.42 27.98 24.48 24.49 18.95 0 4.85 2.21"/>
+        <path class="cls-1" d="M6.89,5.48l4.3.03.4,13.19,6.39.55.56,4.25-12.35-.68.7-17.34Z"/>
+      </g>
+    </symbol>
+  </defs>
+  <g id="Layer_2-2" data-name="Layer 2">
+    <use width="24.48" height="27.98" xlink:href="#L-icon"/>
+  </g>
+</svg>
