@@ -6,7 +6,10 @@ const crypto = require('crypto');
 const CHARTER_VERSION = process.env.CHARTER_VERSION || '2025-08-Preview-1';
 const MODERATION_PROVIDER = (process.env.MODERATION_PROVIDER || '').toLowerCase();
 const { getCharterSync } = require('./charter');
-const fetch = require('node-fetch');
+// Prefer global fetch (Node 18+). Fallback to dynamic import if needed.
+const fetch = (typeof global.fetch === 'function')
+  ? global.fetch
+  : (...args) => import('node-fetch').then(({ default: f }) => f(...args));
 
 // Example charter categories. Extend as needed or replace with external provider.
 const CHARTER = {
@@ -42,9 +45,10 @@ const HARD_BLOCK_REGEX = [
 
 const SOFT_BLOCK_REGEX = [
   /(buy\s+now|limited\s+offer|click\s+here)/i,
-  /(win\s+money|free\s+crypto|airdrop)/i,
-  /\b(?:https?:\/\/)?[\w.-]+\.[a-z]{2,}\/\S*/i // generic links (spam heuristic)
+  /(win\s+money|free\s+crypto|airdrop)/i
 ];
+
+const LINK_REGEX = /\b(?:https?:\/\/)?[\w.-]+\.[a-z]{2,}(?:\/\S*)?/i;
 
 const PII_REGEX = {
   email: /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
@@ -99,20 +103,20 @@ async function evaluateModeration(content, context = {}) {
     }
   }
 
-  for (const re of SOFT_BLOCK_REGEX) {
-    if (re.test(text)) {
-      hits.push({ category: 'spam', rule: re.toString(), severity: 'soft' });
-    }
+  // Relaxed heuristic: require BOTH a spam phrase and a link to trigger spam
+  const hasSpamPhrase = SOFT_BLOCK_REGEX.some(re => re.test(text));
+  const hasLink = LINK_REGEX.test(text);
+  if (hasSpamPhrase && hasLink) {
+    hits.push({ category: 'spam', rule: 'spam+link heuristic', severity: 'soft' });
   }
 
   if (PII_REGEX.email.test(text) || PII_REGEX.phone.test(text)) {
     hits.push({ category: 'pii', rule: 'email/phone regex', severity: 'soft' });
   }
 
-  // Derive action from local rules
+  // Derive action from local rules (binary: allow or hard_block)
   let action = 'allow';
-  if (hits.some(h => h.severity === 'hard')) action = 'hard_block';
-  else if (hits.length > 0) action = 'soft_block';
+  if (hits.length > 0) action = 'hard_block';
 
   const reason = hits.map(h => `${h.category}:${h.rule}`).slice(0, 5).join('; ');
   const latencyMs = Date.now() - startedAt;
@@ -161,9 +165,6 @@ async function evaluateModeration(content, context = {}) {
     if (applied.action === 'hard_block') {
       localDecision.action = 'hard_block';
       localDecision.reason = localDecision.reason || 'Charter threshold breached';
-    } else if (localDecision.action !== 'hard_block' && hits.length > 0) {
-      // Preserve soft block when local rules hit but charter doesn’t hard block
-      localDecision.action = 'soft_block';
     }
   }
   return localDecision;
