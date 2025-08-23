@@ -4,6 +4,7 @@ const crypto = require('crypto');
 // This is intentionally lightweight to enable preview/testing without external providers.
 
 const CHARTER_VERSION = process.env.CHARTER_VERSION || '2025-08-Preview-1';
+const MODERATION_PROVIDER = (process.env.MODERATION_PROVIDER || '').toLowerCase();
 const { getCharterSync } = require('./charter');
 const fetch = require('node-fetch');
 
@@ -40,7 +41,6 @@ const HARD_BLOCK_REGEX = [
 ];
 
 const SOFT_BLOCK_REGEX = [
-  /(damn|shit|fuck|bitch)/i,
   /(buy\s+now|limited\s+offer|click\s+here)/i,
   /(win\s+money|free\s+crypto|airdrop)/i,
   /\b(?:https?:\/\/)?[\w.-]+\.[a-z]{2,}\/\S*/i // generic links (spam heuristic)
@@ -88,7 +88,7 @@ function applyCharter(charter, localHits) {
   return { action: 'allow', violations: [] };
 }
 
-function evaluateModeration(content, context = {}) {
+async function evaluateModeration(content, context = {}) {
   const startedAt = Date.now();
   const text = (content || '').trim();
   const hits = [];
@@ -109,7 +109,7 @@ function evaluateModeration(content, context = {}) {
     hits.push({ category: 'pii', rule: 'email/phone regex', severity: 'soft' });
   }
 
-  // Derive action
+  // Derive action from local rules
   let action = 'allow';
   if (hits.some(h => h.severity === 'hard')) action = 'hard_block';
   else if (hits.length > 0) action = 'soft_block';
@@ -131,13 +131,39 @@ function evaluateModeration(content, context = {}) {
     }
   };
 
-  // Apply Charter thresholds (server-sourced)
+  // Optional: Provider (Grok) classification
+  let providerCategories = [];
+  if (MODERATION_PROVIDER === 'grok') {
+    const provider = await classifyWithGrok(text);
+    const cats = Array.isArray(provider?.categories) ? provider.categories : [];
+    // Expect shape: [{ key, confidence }]; tolerate alternative keys
+    providerCategories = cats
+      .map(c => ({
+        key: c.key || c.category || c.name,
+        confidence: typeof c.confidence === 'number' ? c.confidence : (typeof c.score === 'number' ? c.score : 0.0)
+      }))
+      .filter(c => c.key && c.confidence > 0);
+    if (providerCategories.length > 0) {
+      localDecision.model = 'grok+local';
+    }
+  }
+
+  // Apply Charter thresholds (server-sourced) with merged evidence
   const charter = getCharterSync();
   if (charter) {
-    const applied = applyCharter(charter, hits.map(h => ({ category: h.category, score: h.severity === 'hard' ? 1.0 : 0.7 })));
+    const evidence = [
+      // Local rules mapped to scores
+      ...hits.map(h => ({ category: h.category, score: h.severity === 'hard' ? 1.0 : 0.7 })),
+      // Provider categories mapped to scores (use provider confidence)
+      ...providerCategories.map(pc => ({ category: pc.key, score: Math.max(0, Math.min(1, pc.confidence)) }))
+    ];
+    const applied = applyCharter(charter, evidence);
     if (applied.action === 'hard_block') {
       localDecision.action = 'hard_block';
       localDecision.reason = localDecision.reason || 'Charter threshold breached';
+    } else if (localDecision.action !== 'hard_block' && hits.length > 0) {
+      // Preserve soft block when local rules hit but charter doesn’t hard block
+      localDecision.action = 'soft_block';
     }
   }
   return localDecision;
