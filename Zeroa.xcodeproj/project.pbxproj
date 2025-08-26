@@ -7,9 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		036543CAB4F93C93996DA4B8 /* Pods_ZeroaTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30C81F352212A2AF8DA40681 /* Pods_ZeroaTests.framework */; };
+		778C1213721B3453396C25E0 /* Pods_Zeroa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 046931055CB1555E41B1E172 /* Pods_Zeroa.framework */; };
+		847E3FE62E5D083F00D9A69C /* P256K in Frameworks */ = {isa = PBXBuildFile; productRef = 847E3FE52E5D083F00D9A69C /* P256K */; };
 		84FDE9F52E2674140043C535 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9F42E2674140043C535 /* WebKit.framework */; };
 		84FDE9F92E26772E0043C535 /* EventKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9F82E26772E0043C535 /* EventKit.framework */; };
 		84FDE9FB2E2677330043C535 /* MapKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84FDE9FA2E2677330043C535 /* MapKit.framework */; };
+		B082587E3DD11EBB9D265605 /* Pods_ZeroaUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72845BB10E76813EF800A0B4 /* Pods_ZeroaUITests.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,6 +34,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		046931055CB1555E41B1E172 /* Pods_Zeroa.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Zeroa.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0E9E28186944639E0ECF584C /* Pods-ZeroaTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaTests.debug.xcconfig"; path = "Target Support Files/Pods-ZeroaTests/Pods-ZeroaTests.debug.xcconfig"; sourceTree = "<group>"; };
+		30C81F352212A2AF8DA40681 /* Pods_ZeroaTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ZeroaTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		72845BB10E76813EF800A0B4 /* Pods_ZeroaUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ZeroaUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8449E2E12E24974900F03C18 /* Zeroa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zeroa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8449E2EE2E24974A00F03C18 /* ZeroaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeroaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8449E2F82E24974A00F03C18 /* ZeroaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeroaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -37,6 +45,11 @@
 		84FDE9F42E2674140043C535 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 		84FDE9F82E26772E0043C535 /* EventKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = EventKit.framework; path = System/Library/Frameworks/EventKit.framework; sourceTree = SDKROOT; };
 		84FDE9FA2E2677330043C535 /* MapKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MapKit.framework; path = System/Library/Frameworks/MapKit.framework; sourceTree = SDKROOT; };
+		C74BA5AA549B8725F7359ACD /* Pods-Zeroa.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zeroa.release.xcconfig"; path = "Target Support Files/Pods-Zeroa/Pods-Zeroa.release.xcconfig"; sourceTree = "<group>"; };
+		D73E8E8AB29408F5BEF3AAD1 /* Pods-ZeroaTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaTests.release.xcconfig"; path = "Target Support Files/Pods-ZeroaTests/Pods-ZeroaTests.release.xcconfig"; sourceTree = "<group>"; };
+		E95A55204EFFDD092B279C34 /* Pods-Zeroa.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Zeroa.debug.xcconfig"; path = "Target Support Files/Pods-Zeroa/Pods-Zeroa.debug.xcconfig"; sourceTree = "<group>"; };
+		F5C65D645234632914F940DE /* Pods-ZeroaUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaUITests.debug.xcconfig"; path = "Target Support Files/Pods-ZeroaUITests/Pods-ZeroaUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		F8B54004837913EF058AE92B /* Pods-ZeroaUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-ZeroaUITests.release.xcconfig"; path = "Target Support Files/Pods-ZeroaUITests/Pods-ZeroaUITests.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -75,9 +88,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				847E3FE62E5D083F00D9A69C /* P256K in Frameworks */,
 				84FDE9F92E26772E0043C535 /* EventKit.framework in Frameworks */,
 				84FDE9FB2E2677330043C535 /* MapKit.framework in Frameworks */,
 				84FDE9F52E2674140043C535 /* WebKit.framework in Frameworks */,
+				778C1213721B3453396C25E0 /* Pods_Zeroa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +100,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				036543CAB4F93C93996DA4B8 /* Pods_ZeroaTests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -92,12 +108,26 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B082587E3DD11EBB9D265605 /* Pods_ZeroaUITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		31ACE15170D1BEADBAADE83C /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				E95A55204EFFDD092B279C34 /* Pods-Zeroa.debug.xcconfig */,
+				C74BA5AA549B8725F7359ACD /* Pods-Zeroa.release.xcconfig */,
+				0E9E28186944639E0ECF584C /* Pods-ZeroaTests.debug.xcconfig */,
+				D73E8E8AB29408F5BEF3AAD1 /* Pods-ZeroaTests.release.xcconfig */,
+				F5C65D645234632914F940DE /* Pods-ZeroaUITests.debug.xcconfig */,
+				F8B54004837913EF058AE92B /* Pods-ZeroaUITests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		8449E2D82E24974900F03C18 = {
 			isa = PBXGroup;
 			children = (
@@ -106,6 +136,7 @@
 				8449E2FB2E24974A00F03C18 /* ZeroaUITests */,
 				84FDE9F32E2674140043C535 /* Frameworks */,
 				8449E2E22E24974900F03C18 /* Products */,
+				31ACE15170D1BEADBAADE83C /* Pods */,
 			);
 			sourceTree = "<group>";
 		};
@@ -132,6 +163,9 @@
 				84FDE9FA2E2677330043C535 /* MapKit.framework */,
 				84FDE9F82E26772E0043C535 /* EventKit.framework */,
 				84FDE9F42E2674140043C535 /* WebKit.framework */,
+				046931055CB1555E41B1E172 /* Pods_Zeroa.framework */,
+				30C81F352212A2AF8DA40681 /* Pods_ZeroaTests.framework */,
+				72845BB10E76813EF800A0B4 /* Pods_ZeroaUITests.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -143,6 +177,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8449E3022E24974A00F03C18 /* Build configuration list for PBXNativeTarget "Zeroa" */;
 			buildPhases = (
+				A7BF056915116917D75919A2 /* [CP] Check Pods Manifest.lock */,
 				8449E2DD2E24974900F03C18 /* Sources */,
 				8449E2DE2E24974900F03C18 /* Frameworks */,
 				8449E2DF2E24974900F03C18 /* Resources */,
@@ -155,6 +190,9 @@
 				8449E2E32E24974900F03C18 /* Zeroa */,
 			);
 			name = Zeroa;
+			packageProductDependencies = (
+				847E3FE52E5D083F00D9A69C /* P256K */,
+			);
 			productName = Zeroa;
 			productReference = 8449E2E12E24974900F03C18 /* Zeroa.app */;
 			productType = "com.apple.product-type.application";
@@ -163,6 +201,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8449E3052E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaTests" */;
 			buildPhases = (
+				514597760CA20817CC60828C /* [CP] Check Pods Manifest.lock */,
 				8449E2EA2E24974A00F03C18 /* Sources */,
 				8449E2EB2E24974A00F03C18 /* Frameworks */,
 				8449E2EC2E24974A00F03C18 /* Resources */,
@@ -184,6 +223,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8449E3082E24974A00F03C18 /* Build configuration list for PBXNativeTarget "ZeroaUITests" */;
 			buildPhases = (
+				5BFCBBFF73082BE27F792A84 /* [CP] Check Pods Manifest.lock */,
 				8449E2F42E24974A00F03C18 /* Sources */,
 				8449E2F52E24974A00F03C18 /* Frameworks */,
 				8449E2F62E24974A00F03C18 /* Resources */,
@@ -233,6 +273,9 @@
 			);
 			mainGroup = 8449E2D82E24974900F03C18;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				847E3E582E5D04C200D9A69C /* XCRemoteSwiftPackageReference "secp256k1" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8449E2E22E24974900F03C18 /* Products */;
 			projectDirPath = "";
@@ -274,6 +317,75 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		514597760CA20817CC60828C /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-ZeroaTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		5BFCBBFF73082BE27F792A84 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-ZeroaUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		A7BF056915116917D75919A2 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Zeroa-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8449E2DD2E24974900F03C18 /* Sources */ = {
@@ -434,6 +546,7 @@
 		};
 		8449E3032E24974A00F03C18 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E95A55204EFFDD092B279C34 /* Pods-Zeroa.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -465,6 +578,7 @@
 		};
 		8449E3042E24974A00F03C18 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C74BA5AA549B8725F7359ACD /* Pods-Zeroa.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -495,6 +609,7 @@
 		};
 		8449E3062E24974A00F03C18 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0E9E28186944639E0ECF584C /* Pods-ZeroaTests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -513,6 +628,7 @@
 		};
 		8449E3072E24974A00F03C18 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D73E8E8AB29408F5BEF3AAD1 /* Pods-ZeroaTests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -531,6 +647,7 @@
 		};
 		8449E3092E24974A00F03C18 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5C65D645234632914F940DE /* Pods-ZeroaUITests.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -547,6 +664,7 @@
 		};
 		8449E30A2E24974A00F03C18 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F8B54004837913EF058AE92B /* Pods-ZeroaUITests.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -601,6 +719,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		847E3E582E5D04C200D9A69C /* XCRemoteSwiftPackageReference "secp256k1" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/GigaBitcoin/secp256k1.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.21.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		847E3FE52E5D083F00D9A69C /* P256K */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 847E3E582E5D04C200D9A69C /* XCRemoteSwiftPackageReference "secp256k1" */;
+			productName = P256K;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8449E2D92E24974900F03C18 /* Project object */;
 }

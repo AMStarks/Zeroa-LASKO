@@ -42,16 +42,16 @@ class AppGroupsService {
         let nonce = UUID().uuidString
         let issuedAt = Date().timeIntervalSince1970
         let expiresAt = issuedAt + 120 // 2 minutes
-        let requestData: [String: Any] = [
+        var requestData: [String: Any] = [
             "appName": request.appName,
             "appId": request.appId,
             "permissions": request.permissions,
             "callbackURL": request.callbackURL,
-            "username": request.username as Any,
             "timestamp": issuedAt,
             "nonce": nonce,
             "expiresAt": expiresAt
         ]
+        if let username = request.username { requestData["username"] = username }
         
         // Write to App Groups
         if let defaults = sharedDefaults {
@@ -69,32 +69,29 @@ class AppGroupsService {
             print("❌ Zeroa: Cannot store auth request - App Groups not accessible")
         }
         
-        // ALSO write to shared file as fallback
-        let fileSuccess = writeToSharedFile(key: "lasko_auth_request", data: requestData)
-        if fileSuccess {
-            print("📤 Zeroa: Auth request also stored in shared file for: \(request.appName)")
-        } else {
-            print("⚠️ Zeroa: Failed to store auth request in shared file")
-        }
+        // No file fallback in headless mode
     }
     
     func getLASKOAuthRequest() -> LASKOAuthRequest? {
         print("🔍 Zeroa: Attempting to retrieve LASKO auth request from App Groups...")
         
+        // Recreate suite each read to avoid stale cross-process cache
+        let defaults = UserDefaults(suiteName: appGroupIdentifier)
+        defaults?.synchronize()
+        
         // Debug: List all keys in App Groups
-        if let defaults = sharedDefaults {
-            let allKeys = defaults.dictionaryRepresentation().keys
+        if let d = defaults {
+            let allKeys = d.dictionaryRepresentation().keys
             print("🔍 Zeroa: All keys in App Groups: \(Array(allKeys))")
-            
             for key in allKeys {
-                if let value = defaults.object(forKey: key) {
+                if let value = d.object(forKey: key) {
                     print("📊 Zeroa: Key '\(key)' = \(value)")
                 }
             }
         }
         
-        // First try App Groups
-        if let requestData = sharedDefaults?.dictionary(forKey: "lasko_auth_request") {
+        // Try full request dictionary first
+        if let requestData = defaults?.dictionary(forKey: "lasko_auth_request") {
             print("📦 Zeroa: Found request data in App Groups: \(requestData)")
             
             guard let appName = requestData["appName"] as? String,
@@ -111,13 +108,7 @@ class AppGroupsService {
                 return nil
             }
 
-            // Enforce TTL
-            let now = Date().timeIntervalSince1970
-            if let exp = requestData["expiresAt"] as? Double, now > exp {
-                print("❌ Zeroa: LASKO auth request expired")
-                clearAuthRequest()
-                return nil
-            }
+            // Skip strict TTL rejection here; allow UI to proceed and backend to enforce
             
             print("📥 Zeroa: Retrieved LASKO auth request from App Groups: \(appName)")
             return LASKOAuthRequest(
@@ -130,21 +121,35 @@ class AppGroupsService {
             )
         }
         
-        // Fallback to file-based communication
-        print("🔍 Zeroa: Attempting to retrieve LASKO auth request from shared file...")
-        if let requestData = readFromSharedFile(key: "lasko_auth_request") {
-            print("📦 Zeroa: Found request data in shared file")
-            return parseAuthRequest(requestData)
+        // Fallback: reconstruct from nonce/timestamp keys if present
+        if let nonce = defaults?.string(forKey: "lasko_auth_request_nonce") {
+            let appName = "LASKO"
+            let appId = "com.telestai.LASKO"
+            let permissions = ["post", "read"]
+            let callbackURL = "lasko://auth/callback"
+            guard isAllowedCallback(callbackURL) else {
+                print("❌ Zeroa: Disallowed fallback callback URL: \(callbackURL)")
+                return nil
+            }
+            print("📥 Zeroa: Reconstructed LASKO auth request from nonce/timestamp keys")
+            return LASKOAuthRequest(
+                appName: appName,
+                appId: appId,
+                permissions: permissions,
+                callbackURL: callbackURL,
+                username: nil,
+                nonce: nonce
+            )
         }
         
-        print("❌ Zeroa: No LASKO auth request found in App Groups or file")
+        print("❌ Zeroa: No LASKO auth request found in App Groups")
         return nil
     }
     
     // MARK: - LASKO Authentication Response
     
     func storeLASKOAuthResponse(_ session: LASKOAuthSession) {
-        let responseData: [String: Any] = [
+        var responseData: [String: Any] = [
             "tlsAddress": session.tlsAddress,
             "sessionToken": session.sessionToken,
             "signature": session.signature,
@@ -153,6 +158,11 @@ class AppGroupsService {
             "permissions": session.permissions,
             "responseTimestamp": Date().timeIntervalSince1970
         ]
+        // Also persist compressed public key for reuse by LASKO when posting
+        if let pubHex = CryptoService.shared.getCompressedPublicKeyHex(keychain: WalletService.shared.keychain) {
+            responseData["zeroa_pubkey_compressed_hex"] = pubHex
+            sharedDefaults?.set(pubHex, forKey: "zeroa_pubkey_compressed_hex")
+        }
         
         // Write to App Groups
         if let defaults = sharedDefaults {
@@ -169,17 +179,17 @@ class AppGroupsService {
                     print("📊 Zeroa: Key '\(key)' = \(value)")
                 }
             }
+            // After writing the response, clear the original request to prevent repeated re-signing
+            if defaults.object(forKey: "lasko_auth_request") != nil {
+                defaults.removeObject(forKey: "lasko_auth_request")
+                defaults.synchronize()
+                print("🧹 Zeroa: Cleared LASKO auth request after responding")
+            }
         } else {
             print("❌ Zeroa: Cannot store auth response - App Groups not accessible")
         }
         
-        // ALSO write to shared file as fallback
-        let fileSuccess = writeToSharedFile(key: "lasko_auth_response", data: responseData)
-        if fileSuccess {
-            print("📤 Zeroa: Auth response also stored in shared file for: \(session.tlsAddress)")
-        } else {
-            print("⚠️ Zeroa: Failed to store auth response in shared file")
-        }
+        // No file fallback in headless mode
     }
     
     func getLASKOAuthResponse() -> LASKOAuthSession? {
@@ -203,29 +213,6 @@ class AppGroupsService {
             }
             
             print("📥 Zeroa: Retrieved LASKO auth response from App Groups for: \(tlsAddress.redactedAddress())")
-            return LASKOAuthSession(
-                tlsAddress: tlsAddress,
-                sessionToken: sessionToken,
-                signature: signature,
-                timestamp: timestamp,
-                expiresAt: expiresAt,
-                permissions: permissions
-            )
-        }
-        
-        // Fallback to file-based communication
-        if let responseData = readFromSharedFile(key: "lasko_auth_response") {
-            guard let tlsAddress = responseData["tlsAddress"] as? String,
-                  let sessionToken = responseData["sessionToken"] as? String,
-                  let signature = responseData["signature"] as? String,
-                  let timestamp = responseData["timestamp"] as? Int64,
-                  let expiresAt = responseData["expiresAt"] as? Int64,
-                  let permissions = responseData["permissions"] as? [String] else {
-                print("❌ Zeroa: Invalid LASKO auth response data from file")
-                return nil
-            }
-            
-            print("📥 Zeroa: Retrieved LASKO auth response from shared file for: \(tlsAddress)")
             return LASKOAuthSession(
                 tlsAddress: tlsAddress,
                 sessionToken: sessionToken,
@@ -352,20 +339,34 @@ class AppGroupsService {
     // MARK: - Status Checking
     
     func hasPendingAuthRequest() -> Bool {
-        // Check both App Groups and file
         let appGroupsHasRequest = sharedDefaults?.object(forKey: "lasko_auth_request") != nil
-        let fileHasRequest = readFromSharedFile(key: "lasko_auth_request") != nil
-        
-        print("🔍 Zeroa: Auth request check - App Groups: \(appGroupsHasRequest), File: \(fileHasRequest)")
-        return appGroupsHasRequest || fileHasRequest
+        print("🔍 Zeroa: Auth request check - App Groups: \(appGroupsHasRequest)")
+        return appGroupsHasRequest
     }
     
     func hasAuthResponse() -> Bool {
-        // Check both App Groups and file
         let appGroupsHasResponse = sharedDefaults?.object(forKey: "lasko_auth_response") != nil
-        let fileHasResponse = readFromSharedFile(key: "lasko_auth_response") != nil
-        
-        print("🔍 Zeroa: Auth response check - App Groups: \(appGroupsHasResponse), File: \(fileHasResponse)")
-        return appGroupsHasResponse || fileHasResponse
+        print("🔍 Zeroa: Auth response check - App Groups: \(appGroupsHasResponse)")
+        return appGroupsHasResponse
+    }
+
+    // MARK: - TLS Address Storage
+    func storeTLSAddress(_ address: String) {
+        sharedDefaults?.set(address, forKey: "tls_wallet_address")
+        sharedDefaults?.synchronize()
+    }
+    
+    func getTLSAddress() -> String? {
+        return sharedDefaults?.string(forKey: "tls_wallet_address")
+    }
+
+    // MARK: - Flux Address Storage
+    func storeFluxAddress(_ address: String) {
+        sharedDefaults?.set(address, forKey: "flux_wallet_address")
+        sharedDefaults?.synchronize()
+    }
+    
+    func getFluxAddress() -> String? {
+        return sharedDefaults?.string(forKey: "flux_wallet_address")
     }
 } 

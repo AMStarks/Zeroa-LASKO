@@ -17,23 +17,29 @@ struct ZeroaApp: App {
                 .onOpenURL { url in
                     handleLASKORequest(url)
                 }
-                .sheet(isPresented: $showingLASKOAuth) {
-                    if let request = laskoAuthRequest {
-                        LASKOAuthRequestView(authRequest: request)
-                    } else {
-                        Text("No authentication request available")
-                            .padding()
+                .onAppear {
+                    Task { await HaloService.shared.ensureToken() }
+                    // Seed Flux address if not present (from user-provided address)
+                    if AppGroupsService.shared.getFluxAddress() == nil {
+                        AppGroupsService.shared.storeFluxAddress("t1fBrjkEro8DUfQ3c7nPuF96qmz3C3MVDNL")
+                    }
+                    // Seed TLS address into App Groups if present but missing
+                    if AppGroupsService.shared.getTLSAddress() == nil,
+                       let tls = WalletService.shared.loadAddress() {
+                        AppGroupsService.shared.storeTLSAddress(tls)
+                    }
+                    // Persist compressed public key once at startup for LASKO reuse
+                    if AppGroupsService.shared.sharedDefaults?.string(forKey: "zeroa_pubkey_compressed_hex") == nil,
+                       let pubHex = CryptoService.shared.getCompressedPublicKeyHex(keychain: WalletService.shared.keychain) {
+                        AppGroupsService.shared.sharedDefaults?.set(pubHex, forKey: "zeroa_pubkey_compressed_hex")
+                        AppGroupsService.shared.sharedDefaults?.synchronize()
                     }
                 }
-                .onChange(of: showingLASKOAuth) { newValue in
-                    print("🔍 showingLASKOAuth changed to: \(newValue)")
-                    if newValue {
-                        print("🔍 Sheet presentation triggered")
-                        if let request = laskoAuthRequest {
-                            print("🔍 Creating LASKOAuthRequestView with request: \(request.appName)")
-                        } else {
-                            print("❌ No auth request available for sheet")
-                        }
+                // Headless mode: no sheet presentation
+                .onChange(of: authManager.isAuthenticated) { isAuthed in
+                    print("🔍 Auth state changed: isAuthenticated=\(isAuthed)")
+                    if isAuthed, let pendingRequest = authService.checkForPendingAuthRequest() {
+                        Task { await headlessApproveLASKO(request: pendingRequest) }
                     }
                 }
                 .onAppear {
@@ -43,15 +49,13 @@ struct ZeroaApp: App {
                     // If a stored request is already present when coming to foreground for the first time, show immediately
                     if let pendingRequest = authService.checkForPendingAuthRequest() {
                         if authManager.isAuthenticated {
-                            DispatchQueue.main.async {
-                                self.laskoAuthRequest = pendingRequest
-                                self.showingLASKOAuth = true
-                            }
-                            didNotifyLASKO = false // only reset when we are actively presenting the approval flow
+                            Task { await headlessApproveLASKO(request: pendingRequest) }
+                            didNotifyLASKO = false
                         }
                     }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                    Task { await HaloService.shared.ensureToken() }
                     checkForPendingLASKORequests()
                     startLASKORequestTimer()
                 }
@@ -66,10 +70,10 @@ struct ZeroaApp: App {
         stopLASKORequestTimer() // Stop any existing timer
         
         // Add a timer to actively check for LASKO requests (backed off to reduce churn)
-        laskoCheckTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { _ in
+        laskoCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             checkForPendingLASKORequests()
         }
-        print("✅ LASKO request timer started (checking every 2 seconds)")
+        print("✅ LASKO request timer started (checking every 1 second)")
     }
     
     private func stopLASKORequestTimer() {
@@ -82,58 +86,42 @@ struct ZeroaApp: App {
     private func checkForPendingLASKORequests() {
         print("🔍 Checking for pending LASKO auth requests...")
         
-        // Check for pending auth request
+        // Check for pending auth request (App Groups only)
         if let pendingRequest = authService.checkForPendingAuthRequest() {
             print("📥 Found pending LASKO auth request: \(pendingRequest.appName)")
             print("📋 Request details: \(pendingRequest.permissions)")
             print("🔍 Current auth state: isAuthenticated=\(authManager.isAuthenticated)")
             
-            // Check if Zeroa is logged in before showing auth UI
+            // Headless: if logged in, sign and respond silently; otherwise do nothing
             if authManager.isAuthenticated {
-                print("✅ Zeroa is logged in - showing authentication UI")
-                
-                // Set the request and show UI on main thread
-                DispatchQueue.main.async {
-                    print("🔧 Setting laskoAuthRequest to: \(pendingRequest.appName)")
-                    self.laskoAuthRequest = pendingRequest
-                    print("🔧 Setting showingLASKOAuth = true")
-                    self.showingLASKOAuth = true
-                    print("✅ UI state updated - authentication sheet should appear")
-                }
+                print("✅ Zeroa is logged in - performing headless approval")
+                Task { await headlessApproveLASKO(request: pendingRequest) }
             } else {
-                print("❌ Zeroa is not logged in - cannot authenticate LASKO")
-                print("🔧 Clearing auth request due to not being logged in")
-                authService.clearAuthRequest()
+                print("❌ Zeroa is not logged in - deferring headless approval until login")
             }
             return
         }
         
-        // Check for completed auth response
+        // Check for completed auth response (App Groups only)
         if let authResponse = authService.getAuthResponseFromZeroa() {
             print("✅ Found completed LASKO auth response")
             print("📋 Response details: \(authResponse.tlsAddress) - \(authResponse.permissions)")
-            // Only trigger callback if we actually presented approval this session
-            if showingLASKOAuth && !didNotifyLASKO {
-                didNotifyLASKO = true
-                let callback = URL(string: "lasko://auth/callback?status=approved")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    if let url = callback {
-                        print("🔗 Zeroa: Attempting to open LASKO callback URL: \(url)")
-                        UIApplication.shared.open(url, options: [.universalLinksOnly: false]) { success in
-                            print("🔗 Zeroa: Open LASKO callback URL result: \(success)")
-                        }
-                    }
-                    // Consume response so we do not retrigger
-                    AppGroupsService.shared.clearAuthResponse()
-                }
-            } else {
-                // Stale response: consume silently and do nothing
-                AppGroupsService.shared.clearAuthResponse()
-            }
+            // Headless: do not app-switch; simply leave response for LASKO to consume
             return
         }
         
         print("✅ No pending LASKO auth requests")
+    }
+    
+    private func headlessApproveLASKO(request: LASKOAuthRequest) async {
+        do {
+            print("✍️ Zeroa: Creating session and signature for LASKO headlessly…")
+            let session = try await authService.createLASKOAuthSession(permissions: request.permissions)
+            authService.sendAuthResponseToLASKO(session)
+            print("✅ Zeroa: Auth response written to App Groups for LASKO")
+        } catch {
+            print("❌ Zeroa: Failed to create/send LASKO auth response: \(error)")
+        }
     }
     
     private func handleLASKORequest(_ url: URL) {

@@ -35,26 +35,35 @@ class AppGroupsService {
         }
     }
     
+    // MARK: - Shared Addresses
+    func getTLSAddress() -> String? {
+        sharedDefaults?.synchronize()
+        return sharedDefaults?.string(forKey: "tls_wallet_address")
+    }
+
     // MARK: - LASKO Authentication Request
     
     func storeLASKOAuthRequest(_ request: LASKOAuthRequest) {
         let nonce = UUID().uuidString
         let issuedAt = Date().timeIntervalSince1970
-        let expiresAt = issuedAt + 120
-        let requestData: [String: Any] = [
+        let expiresAt = issuedAt + 300
+        var requestData: [String: Any] = [
             "appName": request.appName,
             "appId": request.appId,
             "permissions": request.permissions,
             "callbackURL": request.callbackURL,
-            "username": request.username as Any,
             "timestamp": issuedAt,
             "nonce": nonce,
             "expiresAt": expiresAt
         ]
+        if let username = request.username { requestData["username"] = username }
         
-        // Write to App Groups
+        // Write to App Groups (write full dict first, then nonce/timestamp)
         if let defaults = sharedDefaults {
             defaults.set(requestData, forKey: "lasko_auth_request")
+            defaults.synchronize()
+            defaults.set(nonce, forKey: "lasko_auth_request_nonce")
+            defaults.set(issuedAt, forKey: "lasko_auth_request_timestamp")
             defaults.synchronize()
             print("📤 LASKO: Auth request stored in App Groups for: \(request.appName)")
             
@@ -68,13 +77,7 @@ class AppGroupsService {
             print("❌ LASKO: Cannot store auth request - App Groups not accessible")
         }
         
-        // ALSO write to shared file as fallback
-        let fileSuccess = writeToSharedFile(key: "lasko_auth_request", data: requestData)
-        if fileSuccess {
-            print("📤 LASKO: Auth request also stored in shared file for: \(request.appName)")
-        } else {
-            print("⚠️ LASKO: Failed to store auth request in shared file")
-        }
+        // No file fallback in headless mode
     }
     
     func getLASKOAuthRequest() -> LASKOAuthRequest? {
@@ -93,6 +96,9 @@ class AppGroupsService {
         }
         
         // First try App Groups
+        if let defaults = sharedDefaults {
+            defaults.synchronize()
+        }
         if let requestData = sharedDefaults?.dictionary(forKey: "lasko_auth_request") {
             print("📦 LASKO: Found request data in App Groups: \(requestData)")
             
@@ -128,14 +134,7 @@ class AppGroupsService {
             )
         }
         
-        // Fallback to file-based communication
-        print("🔍 LASKO: Attempting to retrieve LASKO auth request from shared file...")
-        if let requestData = readFromSharedFile(key: "lasko_auth_request") {
-            print("📦 LASKO: Found request data in shared file")
-            return parseAuthRequest(requestData)
-        }
-        
-        print("❌ LASKO: No LASKO auth request found in App Groups or file")
+        print("❌ LASKO: No LASKO auth request found in App Groups")
         return nil
     }
     
@@ -171,17 +170,12 @@ class AppGroupsService {
             print("❌ LASKO: Cannot store auth response - App Groups not accessible")
         }
         
-        // ALSO write to shared file as fallback
-        let fileSuccess = writeToSharedFile(key: "lasko_auth_response", data: responseData)
-        if fileSuccess {
-            print("📤 LASKO: Auth response also stored in shared file for: \(session.tlsAddress)")
-        } else {
-            print("⚠️ LASKO: Failed to store auth response in shared file")
-        }
+        // No file fallback in headless mode
     }
     
     func getLASKOAuthResponse() -> LASKOAuthSession? {
         // First try App Groups
+        if let defaults = sharedDefaults { defaults.synchronize() }
         if let responseData = sharedDefaults?.dictionary(forKey: "lasko_auth_response") {
             guard let tlsAddress = responseData["tlsAddress"] as? String,
                   let sessionToken = responseData["sessionToken"] as? String,
@@ -201,29 +195,6 @@ class AppGroupsService {
             }
             
             print("📥 LASKO: Retrieved LASKO auth response from App Groups for: \(tlsAddress.redactedAddress())")
-            return LASKOAuthSession(
-                tlsAddress: tlsAddress,
-                sessionToken: sessionToken,
-                signature: signature,
-                timestamp: timestamp,
-                expiresAt: expiresAt,
-                permissions: permissions
-            )
-        }
-        
-        // Fallback to file-based communication
-        if let responseData = readFromSharedFile(key: "lasko_auth_response") {
-            guard let tlsAddress = responseData["tlsAddress"] as? String,
-                  let sessionToken = responseData["sessionToken"] as? String,
-                  let signature = responseData["signature"] as? String,
-                  let timestamp = responseData["timestamp"] as? Int64,
-                  let expiresAt = responseData["expiresAt"] as? Int64,
-                  let permissions = responseData["permissions"] as? [String] else {
-                print("❌ LASKO: Invalid LASKO auth response data from file")
-                return nil
-            }
-            
-            print("📥 LASKO: Retrieved LASKO auth response from shared file for: \(tlsAddress)")
             return LASKOAuthSession(
                 tlsAddress: tlsAddress,
                 sessionToken: sessionToken,
@@ -336,20 +307,14 @@ class AppGroupsService {
     // MARK: - Status Checking
     
     func hasPendingAuthRequest() -> Bool {
-        // Check both App Groups and file
         let appGroupsHasRequest = sharedDefaults?.object(forKey: "lasko_auth_request") != nil
-        let fileHasRequest = readFromSharedFile(key: "lasko_auth_request") != nil
-        
-        print("🔍 LASKO: Auth request check - App Groups: \(appGroupsHasRequest), File: \(fileHasRequest)")
-        return appGroupsHasRequest || fileHasRequest
+        print("🔍 LASKO: Auth request check - App Groups: \(appGroupsHasRequest)")
+        return appGroupsHasRequest
     }
     
     func hasAuthResponse() -> Bool {
-        // Check both App Groups and file
         let appGroupsHasResponse = sharedDefaults?.object(forKey: "lasko_auth_response") != nil
-        let fileHasResponse = readFromSharedFile(key: "lasko_auth_response") != nil
-        
-        print("🔍 LASKO: Auth response check - App Groups: \(appGroupsHasResponse), File: \(fileHasResponse)")
-        return appGroupsHasResponse || fileHasResponse
+        print("🔍 LASKO: Auth response check - App Groups: \(appGroupsHasResponse)")
+        return appGroupsHasResponse
     }
 } 
