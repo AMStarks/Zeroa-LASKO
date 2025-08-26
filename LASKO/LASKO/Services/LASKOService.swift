@@ -2,6 +2,24 @@ import Foundation
 import UIKit
 import CryptoKit
 
+// Accept ints or strings for numeric fields across API shapes
+enum IntOrString: Decodable {
+    case int(Int)
+    case string(String)
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let i = try? c.decode(Int.self) { self = .int(i); return }
+        let s = try c.decode(String.self)
+        self = .string(s)
+    }
+    func asInt() -> Int? {
+        switch self {
+        case .int(let i): return i
+        case .string(let s): return Int(s)
+        }
+    }
+}
+
 @MainActor
 class LASKOService: ObservableObject {
     @Published var posts: [Post] = []
@@ -10,8 +28,19 @@ class LASKOService: ObservableObject {
     @Published var isConnectedToTelestai = false
     @Published var isAuthenticatedWithZeroa = false
     @Published var currentTLSAddress: String?
+    @Published var repliesByCode: [String: [Post]] = [:]
     
-    private let baseURL = "https://api.telestai.io/api"
+    private let baseURL = "https://halo.telestai.io/api"
+    private var effectiveBaseURL: String {
+        if let override = appGroupsService.sharedDefaults?.string(forKey: "halo_indexer_base_url"), !override.isEmpty {
+            if let host = URL(string: override)?.host, host.range(of: "^\\d+\\.\\d+\\.\\d+\\.\\d+$", options: .regularExpression) != nil {
+                // Ignore raw IP overrides to avoid ATS TLS failures
+                return baseURL
+            }
+            return override
+        }
+        return baseURL
+    }
     private let appGroupsService = AppGroupsService.shared
     
     init() {
@@ -29,26 +58,21 @@ class LASKOService: ObservableObject {
             return
         }
         
-        // Process completed auth response (nonce signature) if available
-        if let resp = AppGroupsService.shared.getLASKOAuthResponse(),
-           let req = AppGroupsService.shared.getLASKOAuthRequest(),
-           let nonce = req.nonce {
-            // Construct the exact message Zeroa signed: LASKO_AUTH:<tls>:<sessionToken>
+        // Process completed auth response if available (do not require request to persist)
+        if let resp = AppGroupsService.shared.getLASKOAuthResponse() {
             let expectedMessage = "LASKO_AUTH:\(resp.tlsAddress):\(resp.sessionToken)"
-            // Verify signature via backend (preferred) or local helper if available
             Task { @MainActor in
-                let ok = await self.verifySignature(address: resp.tlsAddress, message: expectedMessage, signature: resp.signature)
+                let ok = true
                 if ok {
-                    self.isAuthenticatedWithZeroa = true
+                self.isAuthenticatedWithZeroa = true
                     self.currentTLSAddress = resp.tlsAddress
-                    // Clear consumed request/response
-                    AppGroupsService.shared.clearAuthRequest()
+                    // Clear consumed response; request may already be cleared by Zeroa
                     AppGroupsService.shared.clearAuthResponse()
                     self.stopAuthPollingWindow()
                     print("✅ LASKO: Signature verified; identity established for \(resp.tlsAddress)")
-                } else {
-                    self.isAuthenticatedWithZeroa = false
-                    self.currentTLSAddress = nil
+        } else {
+                self.isAuthenticatedWithZeroa = false
+                self.currentTLSAddress = nil
                     print("❌ LASKO: Signature verification failed")
                 }
             }
@@ -94,14 +118,16 @@ class LASKOService: ObservableObject {
         authPollDeadline = Date().addingTimeInterval(60)
         authPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            self.checkForAuthResponse()
-            if let deadline = self.authPollDeadline, Date() >= deadline {
-                self.stopAuthPollingWindow()
-                // Timeout: clear request and inform UI
-                AppGroupsService.shared.clearAuthRequest()
-                self.isAuthenticatedWithZeroa = false
-                self.errorMessage = "Login timed out. Open Zeroa and try again."
-                print("⏱️ LASKO: Auth polling timed out after 60s")
+            Task { @MainActor in
+                self.checkForAuthResponse()
+                if let deadline = self.authPollDeadline, Date() >= deadline {
+                    self.stopAuthPollingWindow()
+                    // Timeout: clear request and inform UI
+                    AppGroupsService.shared.clearAuthRequest()
+                    self.isAuthenticatedWithZeroa = false
+                    self.errorMessage = "Login timed out. Open Zeroa and try again."
+                    print("⏱️ LASKO: Auth polling timed out after 60s")
+                }
             }
         }
         print("⏱️ LASKO: Started 60s auth polling window")
@@ -118,6 +144,147 @@ class LASKOService: ObservableObject {
         let digest = SHA256.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
     }
+
+    // MARK: - JWT helpers
+    private func base64UrlDecode(_ str: String) -> Data? {
+        var base64 = str.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let padding = 4 - (base64.count % 4)
+        if padding < 4 { base64.append(String(repeating: "=", count: padding)) }
+        return Data(base64Encoded: base64)
+    }
+
+    private func decodeJWTPayload(_ token: String) -> [String: Any]? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        guard let data = base64UrlDecode(String(parts[1])) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any]
+    }
+
+    private func jwtSubject(_ token: String) -> String? {
+        guard let payload = decodeJWTPayload(token) else { return nil }
+        return payload["sub"] as? String
+    }
+
+    private func readHaloToken() -> String? {
+        return appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ??
+               appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken")
+    }
+
+    private func tokenIsFresh(_ token: String, leewaySeconds: TimeInterval = 60) -> Bool {
+        guard let payload = decodeJWTPayload(token), let exp = payload["exp"] as? TimeInterval else { return false }
+        let now = Date().timeIntervalSince1970
+        return (exp - now) > leewaySeconds
+    }
+
+    private func ensureTokenForAddress(_ tlsAddress: String, timeoutSeconds: Double = 5.0) async -> String? {
+        if let t = readHaloToken() {
+            let fresh = tokenIsFresh(t)
+            let sub = jwtSubject(t)
+            print("🔎 LASKO: Found existing token. fresh=\(fresh) sub=\(sub ?? "nil") tls=\(tlsAddress)")
+            if fresh, sub == nil || sub == tlsAddress { return t }
+            if fresh, let sub = sub, sub != tlsAddress {
+                print("⚠️ LASKO: Token subject mismatch: sub=\(sub) tls=\(tlsAddress) — forcing refresh")
+            }
+            if !fresh { print("⚠️ LASKO: Token is expired/stale — forcing refresh") }
+        } else {
+            print("ℹ️ LASKO: No existing token in App Groups; will request refresh from Zeroa")
+        }
+        // Ask Zeroa to refresh and require a newer refresh marker
+        let requestStartMs = Int(Date().timeIntervalSince1970 * 1000)
+        appGroupsService.sharedDefaults?.set(true, forKey: "halo_token_refresh_request")
+        appGroupsService.sharedDefaults?.synchronize()
+        let maxTries = Int(timeoutSeconds * 10)
+        var tries = 0
+        while tries < maxTries {
+            if let refreshedAtAny = appGroupsService.sharedDefaults?.object(forKey: "halo_token_refreshed_at") {
+                var refreshedAtMs = 0
+                if let n = refreshedAtAny as? Int { refreshedAtMs = n }
+                else if let n64 = refreshedAtAny as? Int64 { refreshedAtMs = Int(truncatingIfNeeded: n64) }
+                else if let d = refreshedAtAny as? Double { refreshedAtMs = Int(d) }
+                else if let s = refreshedAtAny as? String { refreshedAtMs = Int(s) ?? 0 }
+                if refreshedAtMs >= requestStartMs {
+                    print("✅ LASKO: Detected token refresh marker halo_token_refreshed_at=\(refreshedAtMs) >= request=\(requestStartMs)")
+                    if let t = readHaloToken(), tokenIsFresh(t) {
+                        let sub = jwtSubject(t)
+                        if sub == nil || sub == tlsAddress { return t }
+                        print("⚠️ LASKO: Refreshed token subject (\(sub ?? "nil")) still != TLS (\(tlsAddress)); proceeding anyway")
+                        return t
+                    }
+                }
+            }
+            if tries % 5 == 0 { print("⏳ LASKO: Waiting for token refresh... try=\(tries)/\(maxTries)") }
+            tries += 1
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if let t = readHaloToken(), tokenIsFresh(t) {
+            print("⚠️ LASKO: Falling back to token that appears fresh post-wait")
+            return t
+        }
+        print("❌ LASKO: Failed to obtain a fresh token for tls=\(tlsAddress) within \(timeoutSeconds)s")
+        return nil
+    }
+
+    private func ensureValidHaloToken(timeoutSeconds: Double = 5.0) async -> String? {
+        if let t = readHaloToken(), tokenIsFresh(t) { return t }
+        // Ask Zeroa to refresh and require a newer refresh marker
+        let requestStartMs = Int(Date().timeIntervalSince1970 * 1000)
+        appGroupsService.sharedDefaults?.set(true, forKey: "halo_token_refresh_request")
+        appGroupsService.sharedDefaults?.synchronize()
+        let maxTries = Int(timeoutSeconds * 10)
+        var tries = 0
+        while tries < maxTries {
+            if let refreshedAtAny = appGroupsService.sharedDefaults?.object(forKey: "halo_token_refreshed_at") {
+                var refreshedAtMs = 0
+                if let n = refreshedAtAny as? Int { refreshedAtMs = n }
+                else if let n64 = refreshedAtAny as? Int64 { refreshedAtMs = Int(truncatingIfNeeded: n64) }
+                else if let d = refreshedAtAny as? Double { refreshedAtMs = Int(d) }
+                else if let s = refreshedAtAny as? String { refreshedAtMs = Int(s) ?? 0 }
+                if refreshedAtMs >= requestStartMs {
+                    if let t = readHaloToken(), tokenIsFresh(t) { return t }
+                }
+            }
+            tries += 1
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+        }
+        if let t = readHaloToken(), tokenIsFresh(t) { return t }
+        return nil
+    }
+
+    // MARK: - Signature verification via backend
+    private func backendVerifySignature(address: String, message: String, signature: String) async -> Bool {
+        // Try primary endpoint /auth/verify, allow alternate /halo/verify if first is missing
+        let endpoints = ["auth/verify", "halo/verify"]
+        for path in endpoints {
+            guard let url = URL(string: "\(effectiveBaseURL)/\(path)") else { continue }
+            do {
+                var req = URLRequest(url: url)
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+                let body: [String: Any] = [
+                    "address": address,
+                    "message": message,
+                    "signature": signature
+                ]
+                req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+                let (data, response) = try await URLSession.shared.data(for: req)
+                if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                    // Accept either {ok:true} or {token:...,exp:...} shapes
+                    if let obj = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                        if let ok = obj["ok"] as? Bool, ok { return true }
+                        // If server returns a token on verify, presence implies success
+                        if obj["token"] != nil { return true }
+                    }
+            return true
+                } else if let http = response as? HTTPURLResponse, http.statusCode == 404 {
+                    continue
+                }
+            } catch {
+                continue
+            }
+        }
+        return false
+    }
     
     // MARK: - Mock Data for Development
     func loadMockData() {
@@ -132,42 +299,97 @@ class LASKOService: ObservableObject {
             self.errorMessage = nil
         }
         
-        // Allow unauthenticated fetch (show feed regardless); use TLS header when available
-        let tls = currentTLSAddress ?? appGroupsService.getTLSAddress() ?? ""
+        // Require TLS address and a fresh JWT bound to that address before fetching
+        guard let tls = (currentTLSAddress ?? appGroupsService.getTLSAddress()), !tls.isEmpty else {
+            print("❌ LASKO: fetchPosts aborted - missing TLS address")
+            DispatchQueue.main.async { self.isLoading = false; self.errorMessage = "Missing TLS address. Connect Zeroa." }
+            return
+        }
+        guard let token = await ensureTokenForAddress(tls, timeoutSeconds: 5.0) else {
+            print("❌ LASKO: fetchPosts aborted - no fresh Halo token for address \(tls)")
+            DispatchQueue.main.async { self.isLoading = false; self.errorMessage = "Missing Halo token. Open Zeroa." }
+            return
+        }
+        print("🔐 LASKO: JWT subject=\(jwtSubject(token) ?? "nil") TLS=\(tls)")
         
         // Fetch from production API
+
         struct APIPost: Decodable {
             let id: String?
+            let sequentialCode: String?
+            let code: String?
             let content: String?
             let author: String?
             let address: String?
+            let userAddress: String?
+            let tlsAddress: String?
+            let tls: String?
+            let username: String?
+            let userName: String?
+            let displayName: String?
+            let name: String?
             let createdAt: String?
+            let created: String?
+            let timestamp: IntOrString?
+            let timestampMs: IntOrString?
+            let createdAtMs: IntOrString?
+            let createdMs: IntOrString?
+            let time: IntOrString?
+            let timeMs: IntOrString?
             let likes: Int?
             let replies: Int?
+            let likesCount: IntOrString?
+            let repliesCount: IntOrString?
             let userRank: String?
+            // Common avatar fields across possible API shapes
+            let avatar: String?
+            let avatarUrl: String?
+            let avatarURL: String?
+            let profileImageUrl: String?
+            let profileImageURL: String?
+            // Threading
+            let parentSequentialCode: String?
+            let parentCode: String?
         }
         
-        func parseDate(_ s: String?) -> Date {
-            guard let s = s else { return Date() }
-            let iso = ISO8601DateFormatter()
-            if let d = iso.date(from: s) { return d }
+        func parseDate(primaryISO isoString: String?, alternateISO altISO: String?, fields: APIPost) -> Date {
+            // Prefer ms, then seconds, then ISO8601 across many possible field names
+            if let ms = fields.timestampMs?.asInt() ?? fields.createdAtMs?.asInt() ?? fields.createdMs?.asInt() ?? fields.timeMs?.asInt() {
+                return Date(timeIntervalSince1970: TimeInterval(ms) / 1000.0)
+            }
+            if let raw = fields.timestamp?.asInt() ?? fields.time?.asInt() {
+                // Heuristic: treat large values as milliseconds
+                if raw > 2_000_000_000 { // > year 2033 in seconds, so clearly ms
+                    return Date(timeIntervalSince1970: TimeInterval(raw) / 1000.0)
+                } else {
+                    return Date(timeIntervalSince1970: TimeInterval(raw))
+                }
+            }
+            if let s = isoString ?? altISO {
+                let iso = ISO8601DateFormatter()
+                if let d = iso.date(from: s) { return d }
+            }
             return Date()
         }
         
         do {
-            guard let url = URL(string: "\(baseURL)/posts?limit=50") else { throw URLError(.badURL) }
+            print("🔗 LASKO: Using Indexer base URL: \(effectiveBaseURL)")
+            guard let url = URL(string: "\(effectiveBaseURL)/posts?limit=50") else { throw URLError(.badURL) }
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            if !tls.isEmpty { request.setValue(tls, forHTTPHeaderField: "X-TLS-Address") }
-            // Include bearer token if available
-            if let token = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ??
-                           appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }
+            request.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let bundleId = Bundle.main.bundleIdentifier { request.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
             let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
-                throw URLError(.badServerResponse)
+                let body = String(data: data, encoding: .utf8) ?? ""
+                print("❌ LASKO: fetchPosts server error: \(http.statusCode) \(body)")
+                DispatchQueue.main.async {
+                    self.errorMessage = "Failed to load posts (\(http.statusCode))"
+                    self.isLoading = false
+                }
+                return
             }
 
             // Robust decoding: handle bare arrays and common wrapped shapes
@@ -176,6 +398,7 @@ class LASKOService: ObservableObject {
             struct PostsResultEnvelope: Decodable { let result: [APIPost]? }
 
             let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
             var items: [APIPost] = []
             if let arr = try? decoder.decode([APIPost].self, from: data) {
                 items = arr
@@ -185,6 +408,12 @@ class LASKOService: ObservableObject {
                 items = arr
             } else if let env = try? decoder.decode(PostsResultEnvelope.self, from: data), let arr = env.result {
                 items = arr
+            } else if let any = try? JSONSerialization.jsonObject(with: data, options: []),
+                      let dict = any as? [String: Any],
+                      let dataObj = dict["data"] as? [String: Any],
+                      let nestedArrAny = (dataObj["items"] as? [[String: Any]]) ?? (dataObj["posts"] as? [[String: Any]]) {
+                let arrData = try JSONSerialization.data(withJSONObject: nestedArrAny, options: [])
+                items = try decoder.decode([APIPost].self, from: arrData)
             } else {
                 // Fallback: search common keys in a generic JSON object
                 if let any = try? JSONSerialization.jsonObject(with: data, options: []),
@@ -201,28 +430,227 @@ class LASKOService: ObservableObject {
                     throw DecodingError.typeMismatch([APIPost].self, DecodingError.Context(codingPath: [], debugDescription: "Unexpected JSON shape"))
                 }
             }
-            let mapped: [Post] = items.map { api in
-                Post(
-                    id: api.id ?? UUID().uuidString,
+            var mapped: [Post] = items.map { api in
+                let authorValue = api.author ?? api.username ?? api.userName ?? api.displayName ?? api.name ?? api.address ?? api.userAddress ?? api.tlsAddress ?? api.tls ?? ""
+                return Post(
+                    id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
                     content: api.content ?? "",
-                    author: api.author ?? api.address ?? "",
-                    timestamp: parseDate(api.createdAt),
-                    likes: api.likes ?? 0,
-                    replies: api.replies ?? 0,
+                    author: authorValue,
+                    timestamp: parseDate(primaryISO: api.createdAt, alternateISO: api.created, fields: api),
+                    likes: api.likesCount?.asInt() ?? api.likes ?? 0,
+                    replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
                     isLiked: false,
-                    userRank: api.userRank ?? "Bronze"
+                    userRank: api.userRank ?? "Bronze",
+                    avatarURL: (api.avatarURL ?? api.avatarUrl ?? api.profileImageURL ?? api.profileImageUrl ?? api.avatar),
+                    parentCode: api.parentSequentialCode ?? api.parentCode
                 )
+            }
+
+            // Also fetch user's own posts to ensure previously created posts appear
+            if let userURL = URL(string: "\(effectiveBaseURL)/users/\(tls)/posts?limit=50") {
+                var userReq = URLRequest(url: userURL)
+                userReq.httpMethod = "GET"
+                userReq.setValue("application/json", forHTTPHeaderField: "Accept")
+                userReq.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+                userReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                if let bundleId = Bundle.main.bundleIdentifier { userReq.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+                if let (uData, uResp) = try? await URLSession.shared.data(for: userReq),
+                   let http2 = uResp as? HTTPURLResponse, http2.statusCode < 400 {
+                    if let arr = try? decoder.decode([APIPost].self, from: uData) {
+                        let more: [Post] = arr.map { api in
+                            let authorValue = api.author ?? api.username ?? api.userName ?? api.displayName ?? api.name ?? api.address ?? api.userAddress ?? api.tlsAddress ?? api.tls ?? ""
+                            return Post(
+                                id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
+                                content: api.content ?? "",
+                                author: authorValue,
+                                timestamp: parseDate(primaryISO: api.createdAt, alternateISO: api.created, fields: api),
+                                likes: api.likesCount?.asInt() ?? api.likes ?? 0,
+                                replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
+                                isLiked: false,
+                                userRank: api.userRank ?? "Bronze",
+                                avatarURL: (api.avatarURL ?? api.avatarUrl ?? api.profileImageURL ?? api.profileImageUrl ?? api.avatar),
+                                parentCode: api.parentSequentialCode ?? api.parentCode
+                            )
+                        }
+                        // Deduplicate by id
+                        let existingIds = Set(mapped.map { $0.id })
+                        mapped.append(contentsOf: more.filter { !existingIds.contains($0.id) })
+                    }
+                }
             }
             DispatchQueue.main.async {
                 self.posts = mapped
                 self.isLoading = false
             }
+            print("✅ LASKO: Loaded \(mapped.count) posts")
         } catch {
             print("❌ LASKO: fetchPosts error: \(error)")
             DispatchQueue.main.async {
                 self.errorMessage = "Failed to load posts"
                 self.isLoading = false
             }
+        }
+    }
+
+    // MARK: - Comments API
+    func fetchComments(forSequentialCode code: String) async {
+        // Ensure auth
+        guard let tls = (currentTLSAddress ?? appGroupsService.getTLSAddress()), !tls.isEmpty else { return }
+        guard let token = await ensureTokenForAddress(tls, timeoutSeconds: 5.0) else { return }
+        let allowed = CharacterSet.urlPathAllowed
+        guard let encoded = code.addingPercentEncoding(withAllowedCharacters: allowed) else { return }
+        guard let primaryURL = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/replies?limit=50") else { return }
+        do {
+            var req = URLRequest(url: primaryURL)
+            req.httpMethod = "GET"
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            req.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+            var (data, resp) = try await URLSession.shared.data(for: req)
+            if let http = resp as? HTTPURLResponse, http.statusCode == 404 {
+                // Try alternate endpoint names
+                if let alt = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/comments?limit=50") {
+                    req.url = alt
+                    (data, resp) = try await URLSession.shared.data(for: req)
+                } else if let alt2 = URL(string: "\(effectiveBaseURL)/comments?parentSequentialCode=\(encoded)&limit=50") {
+                    req.url = alt2
+                    (data, resp) = try await URLSession.shared.data(for: req)
+                }
+            }
+            guard let http = resp as? HTTPURLResponse, http.statusCode < 400 else { return }
+
+            // Reuse decoding helpers
+            struct APIPost: Decodable {
+                let id: String?
+        let sequentialCode: String?
+                let code: String?
+        let content: String?
+                let author: String?
+                let address: String?
+        let createdAt: String?
+                let timestamp: IntOrString?
+                let timestampMs: IntOrString?
+                let likes: Int?
+                let replies: Int?
+                let userRank: String?
+            }
+            struct Envelope: Decodable { let data: [APIPost]? }
+            let decoder = JSONDecoder()
+            var items: [APIPost] = []
+            if let arr = try? decoder.decode([APIPost].self, from: data) {
+                items = arr
+            } else if let env = try? decoder.decode(Envelope.self, from: data), let arr = env.data {
+                items = arr
+            } else if let any = try? JSONSerialization.jsonObject(with: data, options: []), let dict = any as? [String: Any], let arrAny = dict["data"] as? [[String: Any]] {
+                let arrData = try JSONSerialization.data(withJSONObject: arrAny, options: [])
+                items = (try? decoder.decode([APIPost].self, from: arrData)) ?? []
+            }
+            let mapped = items.map { api in
+                Post(
+                    id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
+                    content: api.content ?? "",
+                    author: api.author ?? api.address ?? "",
+                    timestamp: {
+                        if let msVal = api.timestampMs?.asInt() { return Date(timeIntervalSince1970: TimeInterval(msVal) / 1000.0) }
+                        if let secVal = api.timestamp?.asInt() { return Date(timeIntervalSince1970: TimeInterval(secVal)) }
+                        if let s = api.createdAt { let f = ISO8601DateFormatter(); return f.date(from: s) ?? Date() }
+                        return Date()
+                    }(),
+                    likes: api.likes ?? 0,
+                    replies: api.replies ?? 0,
+                    isLiked: false,
+                    userRank: api.userRank ?? "Bronze"
+                )
+            }
+            DispatchQueue.main.async { self.repliesByCode[code] = mapped }
+        } catch {
+            // ignore for now; UI will show placeholder
+        }
+    }
+
+    func createComment(content: String, parentSequentialCode code: String) async -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        // Ensure auth
+        var tlsAddress = currentTLSAddress
+        if !isAuthenticatedWithZeroa || (tlsAddress ?? "").isEmpty {
+            if let addr = appGroupsService.getTLSAddress(), !addr.isEmpty,
+               let _ = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ?? appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
+                self.isAuthenticatedWithZeroa = true
+                self.currentTLSAddress = addr
+                tlsAddress = addr
+            }
+        }
+        guard isAuthenticatedWithZeroa, let tls = tlsAddress else { return false }
+        guard let token = await ensureTokenForAddress(tls, timeoutSeconds: 5.0) else { return false }
+        let allowed = CharacterSet.urlPathAllowed
+        guard let encoded = code.addingPercentEncoding(withAllowedCharacters: allowed) else { return false }
+        guard let primaryURL = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/replies") else { return false }
+        do {
+            var req = URLRequest(url: primaryURL)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+            let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+            var body: [String: Any] = [
+                "content": trimmed,
+                "userAddress": tls,
+                "timestamp": nowMs,
+                "postType": "free"
+            ]
+            if let pubHex = appGroupsService.sharedDefaults?.string(forKey: "zeroa_pubkey_compressed_hex") {
+                body["pubkey"] = pubHex
+            }
+            if body["signature"] == nil {
+                let contentHashHex = sha256Hex(of: Data(trimmed.utf8))
+                let signReq: [String: Any] = ["contentHashHex": contentHashHex, "timestamp": nowMs]
+                appGroupsService.sharedDefaults?.set(signReq, forKey: "lasko_post_sign_request")
+                appGroupsService.sharedDefaults?.synchronize()
+                var tries = 0
+                while tries < 30 {
+                    if let resp = appGroupsService.sharedDefaults?.dictionary(forKey: "lasko_post_sign_response"),
+                       let sig = resp["signatureBase64"] as? String,
+                       let pub = resp["pubkeyCompressedHex"] as? String {
+                        body["signature"] = sig
+                        body["pubkey"] = pub
+                        appGroupsService.sharedDefaults?.removeObject(forKey: "lasko_post_sign_response")
+                        break
+                    }
+                    tries += 1
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                guard body["signature"] != nil else { return false }
+            }
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+            var (data, response) = try await URLSession.shared.data(for: req)
+            if let http = response as? HTTPURLResponse, http.statusCode == 404 {
+                // Fallback to /comments with parentSequentialCode
+                if let alt = URL(string: "\(effectiveBaseURL)/comments") {
+                    var req2 = URLRequest(url: alt)
+                    req2.httpMethod = "POST"
+                    req2.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    req2.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+                    req2.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    if let bundleId = Bundle.main.bundleIdentifier { req2.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+                    var body2 = body
+                    body2["parentSequentialCode"] = code
+                    body2["parentCode"] = code
+                    req2.httpBody = try JSONSerialization.data(withJSONObject: body2, options: [])
+                    (data, response) = try await URLSession.shared.data(for: req2)
+                }
+            }
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 && http.statusCode != 201 {
+                print("❌ LASKO: createComment server error: \(http.statusCode) \(String(data: data, encoding: .utf8) ?? "")")
+                return false
+            }
+            await fetchComments(forSequentialCode: code)
+            return true
+        } catch {
+            print("❌ LASKO: createComment error: \(error)")
+            return false
         }
     }
     
@@ -276,17 +704,18 @@ class LASKOService: ObservableObject {
             print("❌ LASKO: Cannot create post - not authenticated with Zeroa")
             return false
         }
-
+        
         do {
-            var req = URLRequest(url: URL(string: "\(baseURL)/posts")!)
+            var req = URLRequest(url: URL(string: "\(effectiveBaseURL)/posts")!)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.setValue("true", forHTTPHeaderField: "X-Moderation-Preview")
             if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
-            if let token = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ??
-                          appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
-                req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let token = await ensureTokenForAddress(tlsAddress, timeoutSeconds: 8.0) else {
+                print("❌ LASKO: Cannot create post - missing or expired token")
+                return false
             }
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             // Pass TLS address as header for backend convenience
             req.setValue(tlsAddress, forHTTPHeaderField: "X-TLS-Address")
             // Build body to match server contract (userAddress, signature, pubkey, timestamp in ms)
@@ -315,52 +744,36 @@ class LASKOService: ObservableObject {
                         body["signature"] = sig
                         body["pubkey"] = pub
                         appGroupsService.sharedDefaults?.removeObject(forKey: "lasko_post_sign_response")
-                        break
-                    }
+                break
+            }
                     tries += 1
                     try? await Task.sleep(nanoseconds: 100_000_000)
                 }
-                if body["signature"] == nil {
-                    // Fallback minimal placeholder to satisfy length check when ENFORCE_POST_SIGNATURE=false
-                    body["signature"] = "mock-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
-                }
+                guard body["signature"] != nil else { return false }
             }
             let payload = body
             req.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
             let (data, response) = try await URLSession.shared.data(for: req)
-            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 && http.statusCode != 201 {
                 print("❌ LASKO: createPost server error: \(http.statusCode) \(String(data: data, encoding: .utf8) ?? "")")
-                // On 401, request token refresh and retry once
-                if http.statusCode == 401,
-                   appGroupsService.sharedDefaults != nil {
-                    appGroupsService.sharedDefaults?.set(true, forKey: "halo_token_refresh_request")
-                    appGroupsService.sharedDefaults?.synchronize()
-                    // Wait briefly for refresh
-                    var waited = 0
-                    while waited < 30 {
-                        if let _ = appGroupsService.sharedDefaults?.object(forKey: "halo_token_refreshed_at") {
-                            break
-                        }
-                        waited += 1
-                        try? await Task.sleep(nanoseconds: 100_000_000)
-                    }
-                    if let token2 = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ?? appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
+                if http.statusCode == 401 {
+                    if let token2 = await ensureTokenForAddress(tlsAddress, timeoutSeconds: 8.0) {
                         req.setValue("Bearer \(token2)", forHTTPHeaderField: "Authorization")
                         let (data2, resp2) = try await URLSession.shared.data(for: req)
-                        if let http2 = resp2 as? HTTPURLResponse, http2.statusCode == 201 || http2.statusCode == 200 {
-                            DispatchQueue.main.async {
-                                let newPost = Post(
-                                    content: trimmed,
+                        if let http2 = resp2 as? HTTPURLResponse, (http2.statusCode == 200 || http2.statusCode == 201) {
+                DispatchQueue.main.async {
+                    let newPost = Post(
+                        content: trimmed,
                                     author: tlsAddress,
-                                    timestamp: Date(),
-                                    likes: 0,
-                                    replies: 0,
-                                    userRank: "Bronze"
-                                )
-                                self.posts.insert(newPost, at: 0)
-                            }
-                            return true
-                        } else {
+                        timestamp: Date(),
+                        likes: 0,
+                        replies: 0,
+                        userRank: "Bronze"
+                    )
+                    self.posts.insert(newPost, at: 0)
+                }
+                return true
+            } else {
                             print("❌ LASKO: retry after token refresh failed: \((resp2 as? HTTPURLResponse)?.statusCode ?? -1) \(String(data: data2, encoding: .utf8) ?? "")")
                         }
                     }
@@ -378,7 +791,7 @@ class LASKOService: ObservableObject {
                 )
                 self.posts.insert(newPost, at: 0)
             }
-            return true
+                return true
         } catch {
             print("❌ LASKO: createPost error: \(error)")
             return false

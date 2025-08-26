@@ -208,10 +208,11 @@ struct ContentView: View {
             // No auto-connect here to ensure the user sees the prompt.
         }
         .onChange(of: laskoService.isAuthenticatedWithZeroa, initial: false) { _, isAuthed in
-            if isAuthed, authUIState.step == .waiting {
-                // If auth completes while waiting (even without deep link), complete the UI flow
+            if isAuthed {
+                // When auth completes, mark approved and navigate to the feed
                 DispatchQueue.main.async {
                     authUIState.step = .approved
+                    showingFeed = true
                 }
             }
         }
@@ -336,56 +337,6 @@ struct ModernFeedView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 1.0, green: 0.6, blue: 0.0)))
                         .scaleEffect(1.5)
                     Spacer()
-                } else if !laskoService.isAuthenticatedWithZeroa {
-                    // Show authentication required message
-                    VStack(spacing: 20) {
-                        Spacer()
-                        
-                        Image(systemName: "lock.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.orange)
-                        
-                        Text("Authentication Required")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        Text("LASKO needs to connect to Zeroa to access your TLS address and create posts.")
-                            .font(.body)
-                            .foregroundColor(.white.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
-                        
-                        Button(action: {
-                            laskoService.requestZeroaAuthentication()
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "link.circle.fill")
-                                    .font(.system(size: 20, weight: .semibold))
-                                
-                                Text("Connect to Zeroa")
-                                    .font(.system(size: 18, weight: .semibold, design: .default))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 56)
-                            .background(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 1.0, green: 0.6, blue: 0.0),
-                                        Color(red: 1.0, green: 0.4, blue: 0.0)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(16)
-                            .shadow(color: Color(red: 1.0, green: 0.6, blue: 0.0).opacity(0.3), radius: 10, x: 0, y: 5)
-                        }
-                        .padding(.horizontal, 40)
-                        
-                        Spacer()
-                    }
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 16) {
@@ -393,10 +344,39 @@ struct ModernFeedView: View {
                                 ModernPostCard(post: post) {
                                     selectedPost = post
                                 }
+                                .background(
+                                    NavigationLink(isActive: Binding(
+                                        get: { selectedPost?.id == post.id },
+                                        set: { active in if !active { selectedPost = nil } }
+                                    )) {
+                                        CommentsView(postId: post.id, sequentialCode: post.id)
+                                            .navigationTitle("Comments")
+                                            .navigationBarTitleDisplayMode(.inline)
+                                    } label: { EmptyView() }
+                                    .hidden()
+                                )
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100) // Extra padding for floating button
+                    }
+                    // If unauthenticated, show a small inline banner but still show feed
+                    if !laskoService.isAuthenticatedWithZeroa {
+                        HStack(spacing: 10) {
+                            Image(systemName: "link.circle.fill").foregroundColor(.orange)
+                            Text("Connect to Zeroa to post and comment")
+                                .foregroundColor(.white)
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            Button("Connect") { laskoService.requestZeroaAuthentication() }
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.06))
+                        .cornerRadius(12)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
                     }
                 }
             }
@@ -477,43 +457,54 @@ struct ModernFeedView: View {
 struct ModernPostCard: View {
     let post: Post
     let onTap: () -> Void
+    @EnvironmentObject var laskoService: LASKOService
     @State private var isCommented: Bool = false
     @State private var isAnnounced: Bool = false
     @State private var isLiked: Bool = false
     @State private var likesCount: Int = 0
+    @State private var showReplies: Bool = false
+    @State private var inlineReplyText: String = ""
     
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 16) {
                 // Post header
                 HStack(spacing: 12) {
-                    // User avatar
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 1.0, green: 0.6, blue: 0.0),
-                                        Color(red: 1.0, green: 0.4, blue: 0.0)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                    // User avatar (URL-backed if present)
+                    if let urlStr = post.avatarURL, let url = URL(string: urlStr) {
+                        AsyncImage(url: url) { img in
+                            img.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.white.opacity(0.08))
+                        }
+                        .frame(width: 29, height: 29)
+                        .clipShape(Circle())
+                    } else {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 1.0, green: 0.6, blue: 0.0),
+                                            Color(red: 1.0, green: 0.4, blue: 0.0)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                            .frame(width: 29, height: 29)
-                        
-                        Text(String(post.author.prefix(1)))
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
+                                .frame(width: 29, height: 29)
+                            Text(String(post.author.prefix(1)))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                        }
                     }
                     
+                    // Username and time inline to the right
                     HStack(spacing: 8) {
-                        // Username
-                        Text(post.author)
+                        Text(post.author.isEmpty ? "User" : post.author)
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
-                        
-                        // Timestamp
                         Text(timeAgoString(from: post.timestamp))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
@@ -536,10 +527,54 @@ struct ModernPostCard: View {
                     .foregroundColor(.white)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                // LAS sequential code (for verification)
+                Text("LAS: \(post.id)")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Post actions (evenly spaced across the card)
                 HStack(spacing: 0) {
-                    // Fire button (like)
+                    // Message (comment) first
+                    Button(action: {
+                        isCommented.toggle()
+                        withAnimation { showReplies.toggle() }
+                        // Prefetch comments regardless of displayed count
+                        Task { await laskoService.fetchComments(forSequentialCode: post.id) }
+                        if showReplies {
+                            // already fetched above; toggle visibility
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "message")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.6))
+                            Text("\(post.replies)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.9))
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    Spacer()
+
+                    // Broadcast (share)
+                    Button(action: { isAnnounced.toggle() }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "megaphone")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                            Text("0")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.9))
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+
+                    Spacer()
+
+                    // Fire (like)
                     Button(action: {
                         isLiked.toggle()
                         likesCount += isLiked ? 1 : -1
@@ -558,38 +593,6 @@ struct ModernPostCard: View {
 
                     Spacer()
                     
-                    // Comment button
-                    Button(action: { isCommented.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "message")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.6))
-                            
-                            Text("\(post.replies)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.9))
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-
-                    Spacer()
-                    
-                    // Megaphone button (share)
-                    Button(action: { isAnnounced.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "megaphone")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
-                            
-                            Text("0")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.9))
-                        }
-                    }
-                    .buttonStyle(PlainButtonStyle())
-
-                    Spacer()
-                    
                     // Telestai reward button with transient +10 TLS
                     TelestaiRewardActionButton()
                     
@@ -602,6 +605,55 @@ struct ModernPostCard: View {
                             .foregroundColor(.white.opacity(0.6))
                     }
                     .buttonStyle(PlainButtonStyle())
+                }
+                
+                // Inline replies section
+                if showReplies {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let replies = laskoService.repliesByCode[post.id], !replies.isEmpty {
+                            ForEach(replies) { r in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(r.author)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(timeAgoString(from: r.timestamp))
+                                            .font(.system(size: 11, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.6))
+                                    }
+                                    Text(r.content)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white.opacity(0.95))
+                                }
+                                .padding(10)
+                                .background(Color.white.opacity(0.04))
+                                .cornerRadius(10)
+                            }
+                        } else {
+                            Text("No replies yet.")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        // Inline reply composer
+                        HStack(spacing: 8) {
+                            TextField("Write a reply…", text: $inlineReplyText)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Reply") {
+                                let text = inlineReplyText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !text.isEmpty else { return }
+                                Task {
+                                    let ok = await laskoService.createComment(content: text, parentSequentialCode: post.id)
+                                    if ok {
+                                        inlineReplyText = ""
+                                        await laskoService.fetchComments(forSequentialCode: post.id)
+                                    }
+                                }
+                            }
+                            .disabled(inlineReplyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
             }
             .padding(20)
@@ -686,6 +738,7 @@ struct TelestaiRewardActionButton: View {
 
 // Modern profile view
 struct ModernProfileView: View {
+    @EnvironmentObject var laskoService: LASKOService
     @Environment(\.dismiss) private var dismiss
     @State private var showingImagePicker = false
     @State private var showingBannerImagePicker = false
@@ -695,22 +748,17 @@ struct ModernProfileView: View {
     @State private var bannerImage: UIImage?
     @State private var username = "LASKO User"
     @State private var bio = "Building the future of decentralized social media on LASKO"
-    @State private var tlsAddress = "TLS:1A2B3C4D5E6F7890"
+    @State private var tlsAddress = ""
     @State private var scrollOffset: CGFloat = 0
     
-    // Mock user posts
-    private let mockUserPosts = [
-        Post(content: "Just launched my first LASKO post! The decentralized social experience is incredible. 🚀", author: "LASKO User", likes: 42, replies: 8, userRank: "Gold"),
-        Post(content: "The blockchain integration is working perfectly. Love how transparent everything is on LASKO.", author: "LASKO User", likes: 28, replies: 5, userRank: "Gold"),
-        Post(content: "Can't believe how fast LASKO is growing. The community is amazing and the technology is revolutionary!", author: "LASKO User", likes: 67, replies: 12, userRank: "Gold"),
-        Post(content: "Building the future of social media, one post at a time. LASKO is changing everything.", author: "LASKO User", likes: 34, replies: 6, userRank: "Gold"),
-        Post(content: "The privacy features on LASKO are incredible. No more algorithm manipulation!", author: "LASKO User", likes: 89, replies: 15, userRank: "Gold"),
-        Post(content: "Just discovered the new features on LASKO. The user experience is getting better every day.", author: "LASKO User", likes: 23, replies: 4, userRank: "Gold"),
-        Post(content: "The Telestai network integration is seamless. This is what the future of social media looks like.", author: "LASKO User", likes: 56, replies: 9, userRank: "Gold"),
-        Post(content: "LASKO's decentralized approach is exactly what we needed. No more corporate control over our data.", author: "LASKO User", likes: 78, replies: 11, userRank: "Gold"),
-        Post(content: "The community here is so supportive. LASKO is more than just a platform, it's a movement.", author: "LASKO User", likes: 45, replies: 7, userRank: "Gold"),
-        Post(content: "Excited to see where LASKO goes next. The potential for decentralized social media is limitless!", author: "LASKO User", likes: 91, replies: 18, userRank: "Gold")
-    ]
+    // Remove mock posts; profile should reflect only the current user's real posts
+    private var userPosts: [Post] {
+        let addr: String? = laskoService.currentTLSAddress ?? (tlsAddress.isEmpty ? nil : tlsAddress)
+        return laskoService.posts.filter { p in
+            guard let a = addr, !a.isEmpty else { return false }
+            return p.author == a
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -809,7 +857,7 @@ struct ModernProfileView: View {
                                         .shadow(color: Color(red: 1.0, green: 0.6, blue: 0.0).opacity(0.4), radius: 3, x: 0, y: 2)
                                 }
                                 
-                                Text(tlsAddress)
+                                Text(tlsAddress.isEmpty ? (laskoService.currentTLSAddress ?? "") : tlsAddress)
                                     .font(.system(size: 12, weight: .medium))
                                     .foregroundColor(.gray)
                             }
@@ -890,9 +938,9 @@ struct ModernProfileView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 20)
                             
-                            // Mock posts
+                            // User's posts only
                             LazyVStack(spacing: 12) {
-                                ForEach(mockUserPosts, id: \.id) { post in
+                                ForEach(userPosts, id: \.id) { post in
                                     ModernPostCard(post: post) {}
                                 }
                             }
@@ -928,6 +976,12 @@ struct ModernProfileView: View {
         }
         .sheet(isPresented: $showingBioEditor) {
             BioEditorView(bio: $bio)
+        }
+        .onAppear {
+            // Initialize TLS address from service for display
+            if tlsAddress.isEmpty {
+                tlsAddress = laskoService.currentTLSAddress ?? tlsAddress
+            }
         }
     }
 }
