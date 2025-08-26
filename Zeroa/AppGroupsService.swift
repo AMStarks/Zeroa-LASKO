@@ -225,6 +225,54 @@ class AppGroupsService {
         
         return nil
     }
+
+    // MARK: - Post Sign Handshake
+
+    func getPostSignRequest() -> [String: Any]? {
+        let defaults = sharedDefaults
+        defaults?.synchronize()
+        if let req = defaults?.dictionary(forKey: "lasko_post_sign_request") {
+            return req
+        }
+        return nil
+    }
+
+    func storePostSignResponse(signatureBase64: String, pubkeyCompressedHex: String, timestampMs: Int64) {
+        var data: [String: Any] = [
+            "signatureBase64": signatureBase64,
+            "pubkeyCompressedHex": pubkeyCompressedHex,
+            "timestamp": timestampMs,
+            "responseTimestamp": Int64(Date().timeIntervalSince1970 * 1000)
+        ]
+        if let existingPub = sharedDefaults?.string(forKey: "zeroa_pubkey_compressed_hex"), existingPub.count == 66 {
+            data["pubkeyCompressedHex"] = existingPub
+        }
+        sharedDefaults?.set(data, forKey: "lasko_post_sign_response")
+        sharedDefaults?.synchronize()
+    }
+
+    func clearPostSignRequest() {
+        sharedDefaults?.removeObject(forKey: "lasko_post_sign_request")
+    }
+
+    func clearPostSignResponse() {
+        sharedDefaults?.removeObject(forKey: "lasko_post_sign_response")
+    }
+
+    // MARK: - Token Refresh Flags
+    func hasTokenRefreshRequest() -> Bool {
+        return sharedDefaults?.object(forKey: "halo_token_refresh_request") != nil
+    }
+
+    func clearTokenRefreshRequest() {
+        sharedDefaults?.removeObject(forKey: "halo_token_refresh_request")
+        sharedDefaults?.synchronize()
+    }
+
+    func markTokenRefreshed() {
+        sharedDefaults?.set(Int64(Date().timeIntervalSince1970 * 1000), forKey: "halo_token_refreshed_at")
+        sharedDefaults?.synchronize()
+    }
     
     // MARK: - Cleanup
     

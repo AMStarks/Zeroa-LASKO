@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import CryptoKit
 
 @MainActor
 class LASKOService: ObservableObject {
@@ -111,6 +112,12 @@ class LASKOService: ObservableObject {
         authPollTimer = nil
         authPollDeadline = nil
     }
+
+    // MARK: - Crypto utils
+    private func sha256Hex(of data: Data) -> String {
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
     
     // MARK: - Mock Data for Development
     func loadMockData() {
@@ -125,15 +132,8 @@ class LASKOService: ObservableObject {
             self.errorMessage = nil
         }
         
-        // Require established identity (TLS address) proven via Zeroa signature
-        guard isAuthenticatedWithZeroa, let tls = currentTLSAddress, !tls.isEmpty else {
-            print("⚠️ LASKO: Not authenticated via Zeroa signature - cannot fetch posts")
-            DispatchQueue.main.async {
-                self.isLoading = false
-                self.errorMessage = "Not authenticated. Open Zeroa to approve LASKO."
-            }
-            return
-        }
+        // Allow unauthenticated fetch (show feed regardless); use TLS header when available
+        let tls = currentTLSAddress ?? appGroupsService.getTLSAddress() ?? ""
         
         // Fetch from production API
         struct APIPost: Decodable {
@@ -159,8 +159,7 @@ class LASKOService: ObservableObject {
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.setValue("application/json", forHTTPHeaderField: "Accept")
-            // Attach TLS identity header for backend if required
-            request.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
+            if !tls.isEmpty { request.setValue(tls, forHTTPHeaderField: "X-TLS-Address") }
             // Include bearer token if available
             if let token = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ??
                            appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
@@ -282,6 +281,8 @@ class LASKOService: ObservableObject {
             var req = URLRequest(url: URL(string: "\(baseURL)/posts")!)
             req.httpMethod = "POST"
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("true", forHTTPHeaderField: "X-Moderation-Preview")
+            if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
             if let token = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ??
                           appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
                 req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -299,17 +300,71 @@ class LASKOService: ObservableObject {
             if let pubHex = appGroupsService.sharedDefaults?.string(forKey: "zeroa_pubkey_compressed_hex") {
                 body["pubkey"] = pubHex
             }
-            if let sig = appGroupsService.sharedDefaults?.string(forKey: "lasko_last_post_signature_b64") {
-                body["signature"] = sig
-            } else {
-                // Fallback minimal placeholder to satisfy length check when ENFORCE_POST_SIGNATURE=false
-                body["signature"] = "mock-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
+            // Try silent post-sign: request signature from Zeroa if not already present
+            if body["signature"] == nil {
+                let contentHashHex = sha256Hex(of: Data(trimmed.utf8))
+                let signReq: [String: Any] = ["contentHashHex": contentHashHex, "timestamp": nowMs]
+                appGroupsService.sharedDefaults?.set(signReq, forKey: "lasko_post_sign_request")
+                appGroupsService.sharedDefaults?.synchronize()
+                // Poll briefly for response (up to 3s)
+                var tries = 0
+                while tries < 30 {
+                    if let resp = appGroupsService.sharedDefaults?.dictionary(forKey: "lasko_post_sign_response"),
+                       let sig = resp["signatureBase64"] as? String,
+                       let pub = resp["pubkeyCompressedHex"] as? String {
+                        body["signature"] = sig
+                        body["pubkey"] = pub
+                        appGroupsService.sharedDefaults?.removeObject(forKey: "lasko_post_sign_response")
+                        break
+                    }
+                    tries += 1
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+                if body["signature"] == nil {
+                    // Fallback minimal placeholder to satisfy length check when ENFORCE_POST_SIGNATURE=false
+                    body["signature"] = "mock-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(16)
+                }
             }
             let payload = body
             req.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
             let (data, response) = try await URLSession.shared.data(for: req)
             if let http = response as? HTTPURLResponse, http.statusCode != 200 {
                 print("❌ LASKO: createPost server error: \(http.statusCode) \(String(data: data, encoding: .utf8) ?? "")")
+                // On 401, request token refresh and retry once
+                if http.statusCode == 401,
+                   appGroupsService.sharedDefaults != nil {
+                    appGroupsService.sharedDefaults?.set(true, forKey: "halo_token_refresh_request")
+                    appGroupsService.sharedDefaults?.synchronize()
+                    // Wait briefly for refresh
+                    var waited = 0
+                    while waited < 30 {
+                        if let _ = appGroupsService.sharedDefaults?.object(forKey: "halo_token_refreshed_at") {
+                            break
+                        }
+                        waited += 1
+                        try? await Task.sleep(nanoseconds: 100_000_000)
+                    }
+                    if let token2 = appGroupsService.sharedDefaults?.string(forKey: "halo_access_token") ?? appGroupsService.sharedDefaults?.string(forKey: "haloAccessToken") {
+                        req.setValue("Bearer \(token2)", forHTTPHeaderField: "Authorization")
+                        let (data2, resp2) = try await URLSession.shared.data(for: req)
+                        if let http2 = resp2 as? HTTPURLResponse, http2.statusCode == 201 || http2.statusCode == 200 {
+                            DispatchQueue.main.async {
+                                let newPost = Post(
+                                    content: trimmed,
+                                    author: tlsAddress,
+                                    timestamp: Date(),
+                                    likes: 0,
+                                    replies: 0,
+                                    userRank: "Bronze"
+                                )
+                                self.posts.insert(newPost, at: 0)
+                            }
+                            return true
+                        } else {
+                            print("❌ LASKO: retry after token refresh failed: \((resp2 as? HTTPURLResponse)?.statusCode ?? -1) \(String(data: data2, encoding: .utf8) ?? "")")
+                        }
+                    }
+                }
                 return false
             }
             DispatchQueue.main.async {

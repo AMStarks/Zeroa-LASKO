@@ -58,6 +58,7 @@ struct ZeroaApp: App {
                     Task { await HaloService.shared.ensureToken() }
                     checkForPendingLASKORequests()
                     startLASKORequestTimer()
+                    handleBackgroundHandshakes()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
                     stopLASKORequestTimer()
@@ -111,6 +112,32 @@ struct ZeroaApp: App {
         }
         
         print("✅ No pending LASKO auth requests")
+    }
+
+    // MARK: - Background handshakes (post-sign + token refresh)
+    private func handleBackgroundHandshakes() {
+        // Token refresh request from LASKO
+        if AppGroupsService.shared.hasTokenRefreshRequest() {
+            Task {
+                await HaloService.shared.ensureToken()
+                AppGroupsService.shared.markTokenRefreshed()
+                AppGroupsService.shared.clearTokenRefreshRequest()
+            }
+        }
+        // Post-sign request
+        if let req = AppGroupsService.shared.getPostSignRequest() {
+            guard authManager.isAuthenticated else { return }
+            let contentHash = req["contentHashHex"] as? String ?? ""
+            let timestampMs = (req["timestamp"] as? Int64) ?? Int64(Date().timeIntervalSince1970 * 1000)
+            let userAddress = WalletService.shared.loadAddress() ?? ""
+            let bundleId = Bundle.main.bundleIdentifier ?? ""
+            let canonical = "LASKO_POST|\(contentHash)|\(timestampMs)|\(userAddress)|\(bundleId)|v1"
+            if let sigB64 = CryptoService.shared.signMessageBase64(canonical, keychain: WalletService.shared.keychain),
+               let pubHex = CryptoService.shared.getCompressedPublicKeyHex(keychain: WalletService.shared.keychain) {
+                AppGroupsService.shared.storePostSignResponse(signatureBase64: sigB64, pubkeyCompressedHex: pubHex, timestampMs: timestampMs)
+                AppGroupsService.shared.clearPostSignRequest()
+            }
+        }
     }
     
     private func headlessApproveLASKO(request: LASKOAuthRequest) async {
