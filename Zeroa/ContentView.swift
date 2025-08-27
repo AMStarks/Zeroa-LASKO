@@ -80,14 +80,14 @@ struct ContentView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var path = NavigationPath()
-    @StateObject private var assistantService = AssistantService.shared
+    // @StateObject private var assistantService = AssistantService.shared // Moved to inactive
     @StateObject private var tlsService = TLSBlockchainService.shared
-    @StateObject private var messagingService = MessagingService.shared
+    // @StateObject private var messagingService = MessagingService.shared // Moved to inactive
     // TinyLlama now uses server-based integration
     
     // Messaging state variables
-    @State private var conversations: [ChatConversation] = []
-    @State private var currentConversation: ChatConversation?
+    // @State private var conversations: [ChatConversation] = [] // Types moved to inactive
+    // @State private var currentConversation: ChatConversation? // Types moved to inactive
     @State private var messageText = ""
     @State private var showNewChat = false
     @State private var newContactName = ""
@@ -157,7 +157,7 @@ struct ContentView: View {
             .navigationDestination(for: String.self) { value in
                 switch value {
                 case "home":
-                    HomeView(path: $path, assistantService: assistantService, tlsService: tlsService)
+                    HomeView(path: $path, tlsService: tlsService)
                 case "create":
                     CreateAccountView(path: $path)
                 case "prioritization":
@@ -177,11 +177,14 @@ struct ContentView: View {
                 case "ai":
                     AIFeaturesView(path: $path)
                 case "ai-companion":
-                    CompanionManagementView(path: $path)
+                    // CompanionManagementView(path: $path) // Moved to inactive
+                    Text("Companion Management - Feature Disabled")
                 case "ai-companion-conversation":
-                    CompanionConversationView()
+                    // CompanionConversationView() // Moved to inactive
+                    Text("Companion Conversation - Feature Disabled")
                 case "ai-companion-settings":
-                    CompanionSettingsView()
+                    // CompanionSettingsView() // Moved to inactive
+                    Text("Companion Settings - Feature Disabled")
                 // case "tinyllama-chat":
                 //     TinyLlamaChatView()
 
@@ -210,11 +213,12 @@ struct ContentView: View {
             HybridMessagingView()
         }
         .sheet(isPresented: $showNewChat) {
-            NewChatView(
-                newContactName: $newContactName,
-                newContactAddress: $newContactAddress,
-                conversations: $conversations
-            )
+            // NewChatView( // Moved to inactive
+            //     newContactName: $newContactName,
+            //     newContactAddress: $newContactAddress,
+            //     conversations: $conversations
+            // )
+            Text("New Chat - Feature Disabled")
         }
         .sheet(isPresented: $showSignInModal) {
             SignInModalView(
@@ -226,19 +230,19 @@ struct ContentView: View {
                 path: $path
             )
         }
-        .sheet(item: $currentConversation) { conversation in
-            ChatView(
-                conversation: Binding(
-                    get: { conversation },
-                    set: { newValue in
-                        if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
-                            conversations[index] = newValue
-                        }
-                    }
-                ),
-                messageText: $messageText
-            )
-        }
+        // .sheet(item: $currentConversation) { conversation in // Types moved to inactive
+        //     ChatView(
+        //         conversation: Binding(
+        //             get: { conversation },
+        //             set: { newValue in
+        //                 if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+        //                     conversations[index] = newValue
+        //                 }
+        //             }
+        //         ),
+        //         messageText: $messageText
+        //     )
+        // }
     }
 
     private func handleSignIn() {
@@ -506,7 +510,7 @@ struct SignInModalView: View {
 // MARK: - Home View
 struct HomeView: View {
     @Binding var path: NavigationPath
-    @ObservedObject var assistantService: AssistantService
+    // @ObservedObject var assistantService: AssistantService // Moved to inactive
     @ObservedObject var tlsService: TLSBlockchainService
     // Command input removed - functionality preserved for future use
     @State private var isSubscribed = false
@@ -519,7 +523,7 @@ struct HomeView: View {
     @State private var networkHashrate: Double?
     @State private var showAlert = false
     @State private var alertMessage = ""
-    @State private var prioritizedMessages: [ChatMessage] = []
+    // @State private var prioritizedMessages: [ChatMessage] = [] // Types moved to inactive
     // Coin Selection and Data
     @State private var selectedCoin: String = "Telestai"
     @State private var availableCoins = ["Telestai", "Bitcoin", "USDT", "USDC", "Litecoin", "Flux", "Kaspa"]
@@ -596,8 +600,8 @@ struct HomeView: View {
     @State private var showHamburgerMenu = false
     
     // BitChat Messaging
-    @State private var conversations: [ChatConversation] = []
-    @State private var currentConversation: ChatConversation?
+    // @State private var conversations: [ChatConversation] = [] // Types moved to inactive
+    // @State private var currentConversation: ChatConversation? // Types moved to inactive
     @State private var messageText = ""
     @State private var showNewChat = false
     @State private var newContactName = ""

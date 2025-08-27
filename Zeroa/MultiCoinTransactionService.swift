@@ -178,13 +178,13 @@ class MultiCoinTransactionService: ObservableObject {
         toAddress: String,
         message: String,
         amount: Double = 0.0,
-        messageType: TLSMessage.TLSMessageType = .text
+        // messageType: TLSMessage.TLSMessageType = .text // Type moved to inactive
     ) async -> TLSPaymentResponse {
         return await tlsService.sendPayment(
             toAddress: toAddress,
             amount: amount,
             message: message,
-            messageType: messageType.rawValue
+            // messageType: messageType.rawValue // Type moved to inactive
         )
     }
     
