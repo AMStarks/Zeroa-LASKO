@@ -768,21 +768,15 @@ struct ReceiveTransactionView: View {
     }
     
     private func generateReceiveAddress() {
-        // Generate address for the selected coin
-        // For now, always use mock addresses to ensure consistency
-        let mockAddress = generateMockAddress(for: receiveData.coinType)
-        receiveData.address = mockAddress
+        switch receiveData.coinType {
+        case .telestai:
+            if let addr = walletService.loadAddress() { receiveData.address = addr } else { receiveData.address = "" }
+        case .flux:
+            receiveData.address = AppGroupsService.shared.getFluxAddress() ?? ""
+        default:
+            receiveData.address = ""
+        }
         generateQRCode()
-    }
-    
-    private func generateMockAddress(for coinType: CoinType) -> String {
-        // Generate a deterministic mock address based on coin type
-        // This ensures the same address is always generated for the same coin
-        let prefix = coinType.symbol
-        let seed = "\(coinType.name)\(coinType.symbol)".data(using: .utf8) ?? Data()
-        let hash = seed.map { String(format: "%02X", $0) }.joined()
-        let addressPart = String(hash.prefix(32))
-        return "\(prefix)\(addressPart)"
     }
     
     private func generateQRCode() {

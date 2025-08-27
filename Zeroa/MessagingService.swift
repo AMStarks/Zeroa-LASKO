@@ -126,7 +126,7 @@ class MessagingService: ObservableObject {
         let mockConversations = [
             ChatConversation(
                 id: "conv_1",
-                participants: [walletService.loadAddress() ?? "", "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"],
+                participants: [walletService.loadAddress() ?? ""],
                 lastMessage: ChatMessage(
                     id: "msg_1",
                     senderAddress: "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ",
@@ -147,11 +147,11 @@ class MessagingService: ObservableObject {
             ),
             ChatConversation(
                 id: "conv_2",
-                participants: [walletService.loadAddress() ?? "", "TLS_Support"],
+                participants: [walletService.loadAddress() ?? ""],
                 lastMessage: ChatMessage(
                     id: "msg_2",
                     senderAddress: walletService.loadAddress() ?? "",
-                    receiverAddress: "TLS_Support",
+                    receiverAddress: "",
                     content: "Thanks for the help!",
                     timestamp: Date().addingTimeInterval(-1800),
                     messageType: .text,
@@ -183,7 +183,7 @@ class MessagingService: ObservableObject {
             ChatMessage(
                 id: "msg_2",
                 senderAddress: walletService.loadAddress() ?? "",
-                receiverAddress: "TLS_Support",
+                receiverAddress: "",
                 content: "Thanks for the help!",
                 timestamp: Date().addingTimeInterval(-1800),
                 messageType: .text,
@@ -214,7 +214,7 @@ class MessagingService: ObservableObject {
         ]
         
         let randomMessage = mockMessages.randomElement() ?? "Hello!"
-        let randomSender = ["ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ", "TLS_Support"].randomElement() ?? "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
+        let randomSender = ""
         
         let newMessage = ChatMessage(
             id: UUID().uuidString,

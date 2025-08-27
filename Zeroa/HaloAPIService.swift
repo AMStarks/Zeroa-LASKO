@@ -3,7 +3,7 @@ import Foundation
 final class HaloAPIService {
     static let shared = HaloAPIService()
 
-    private let baseURL = URL(string: "https://api.telestai.io/api")!
+    private let baseURL = URL(string: "https://halo.telestai.io/api")!
     private let appGroups = AppGroupsService.shared
 
     struct Challenge: Decodable {
@@ -12,8 +12,10 @@ final class HaloAPIService {
     }
 
     struct VerifyResponse: Decodable {
+        let success: Bool?
         let token: String
-        let exp: Int64
+        let exp: Int64?
+        let expiresIn: Int?
     }
 
     func storedToken() -> (token: String, exp: Int64)? {
@@ -31,18 +33,33 @@ final class HaloAPIService {
         defaults.set(exp, forKey: "halo_token_expires_at")
         // Back-compat alias some codepaths use
         defaults.set(token, forKey: "haloAccessToken")
+        let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+        defaults.set(nowMs, forKey: "halo_token_refreshed_at")
         defaults.synchronize()
     }
 
     func requestChallenge(address: String, bundleId: String) async throws -> Challenge {
-        var comps = URLComponents(url: baseURL.appendingPathComponent("halo/challenge"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            URLQueryItem(name: "address", value: address),
-            URLQueryItem(name: "bundleId", value: bundleId)
-        ]
-        let url = comps.url!
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+        // Try /halo/challenge first, then fallback to /auth/challenge for older servers
+        func doRequest(_ path: String) async throws -> (Data, URLResponse) {
+            var comps = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+            comps.queryItems = [
+                URLQueryItem(name: "address", value: address),
+                URLQueryItem(name: "bundleId", value: bundleId)
+            ]
+            var req = URLRequest(url: comps.url!)
+            req.httpMethod = "GET"
+            req.setValue("application/json", forHTTPHeaderField: "Accept")
+            req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id")
+            return try await URLSession.shared.data(for: req)
+        }
+
+        var (data, response) = try await doRequest("halo/challenge")
+        if let http = response as? HTTPURLResponse, http.statusCode == 404 {
+            (data, response) = try await doRequest("auth/challenge")
+        }
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("❌ HaloAPIService.challenge HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
         // Support both {nonce, ttlSeconds} and {data:{nonce, ttlSeconds}}
@@ -58,20 +75,31 @@ final class HaloAPIService {
         throw URLError(.cannotParseResponse)
     }
 
-    func verify(address: String, bundleId: String, nonce: String, signature: String) async throws -> VerifyResponse {
-        let url = baseURL.appendingPathComponent("halo/verify")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: String] = [
-            "address": address,
-            "bundleId": bundleId,
-            "nonce": nonce,
-            "signature": signature
-        ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+    func verify(address: String, bundleId: String, nonce: String, signature: String, pubkeyCompressedHex: String) async throws -> VerifyResponse {
+        // Try /halo/verify first, then fallback to /auth/verify for older servers
+        func doVerify(_ path: String) async throws -> (Data, URLResponse) {
+            let url = baseURL.appendingPathComponent(path)
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id")
+            let body: [String: String] = [
+                "address": address,
+                "bundleId": bundleId,
+                "nonce": nonce,
+                "signature": signature,
+                "pubkey": pubkeyCompressedHex
+            ]
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+            return try await URLSession.shared.data(for: req)
+        }
+        var (data, response) = try await doVerify("halo/verify")
+        if let http = response as? HTTPURLResponse, http.statusCode == 404 {
+            (data, response) = try await doVerify("auth/verify")
+        }
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            print("❌ HaloAPIService.verify HTTP \(http.statusCode): \(body)")
             throw URLError(.badServerResponse)
         }
         return try JSONDecoder().decode(VerifyResponse.self, from: data)

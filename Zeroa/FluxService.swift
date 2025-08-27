@@ -62,6 +62,16 @@ class FluxService: CoinServiceProtocol {
             lastUpdated: Date()
         )
     }
+
+    // Convenience to fetch using an App Groups provided address if needed
+    func getBalanceFromAppGroups() async -> WalletBalance {
+        let appGroups = AppGroupsService.shared.sharedDefaults
+        let addr = appGroups?.string(forKey: "flux_wallet_address")
+        if let a = addr, !a.isEmpty {
+            return await getBalance(address: a)
+        }
+        return WalletBalance(coinType: coinType, confirmed: 0.0, unconfirmed: 0.0, total: 0.0, lastUpdated: Date())
+    }
     
     // MARK: - Transaction Management
     func sendTransaction(request: SendTransactionRequest) async -> SendTransactionResponse {
@@ -220,22 +230,127 @@ class FluxService: CoinServiceProtocol {
 // MARK: - Flux API
 class FluxAPI: BlockchainAPIProtocol {
     let baseURL = "https://explorer.runonflux.io/api"
+    let apiBase = "https://api.runonflux.io"
     let networkName = "Flux"
     
     func getAddressInfo(address: String) async -> AddressInfo? {
-        guard let url = URL(string: "\(baseURL)/address/\(address)") else { return nil }
-        
+        // 1) Try official aggregator endpoint first
+        if let fromAgg = await getBalanceFromAggregator(address: address) {
+            return fromAgg
+        }
+        // 2) Fallback to explorer /addr (satoshi fields)
+        guard let utxoURL = URL(string: "\(baseURL)/addr/\(address)") else { return nil }
+
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                let addressInfo = try JSONDecoder().decode(AddressInfo.self, from: data)
-                return addressInfo
+            let (utxoData, utxoResp) = try await URLSession.shared.data(from: utxoURL)
+            guard let utxoHttp = utxoResp as? HTTPURLResponse, utxoHttp.statusCode == 200 else { return nil }
+            let utxo = try JSONDecoder().decode(FluxAddrInfo.self, from: utxoData)
+
+            // balanceSat/unconfirmedBalanceSat are satoshis
+            let confirmed = Double(utxo.balanceSat ?? 0) / 100_000_000.0
+            let unconfirmed = Double(utxo.unconfirmedBalanceSat ?? 0) / 100_000_000.0
+
+            let txs: [TransactionInfo] = (utxo.transactions ?? []).map { tx in
+                TransactionInfo(
+                    txid: tx.txid ?? "",
+                    amount: tx.amount ?? 0,
+                    fee: tx.fee ?? 0,
+                    confirmations: tx.confirmations ?? 0,
+                    timestamp: Date(timeIntervalSince1970: TimeInterval(tx.time ?? 0)),
+                    blockHeight: tx.blockheight,
+                    fromAddress: tx.inputs?.first?.address,
+                    toAddress: tx.outputs?.first?.address,
+                    type: (tx.amount ?? 0) >= 0 ? "receive" : "send",
+                    status: (tx.confirmations ?? 0) > 0 ? "confirmed" : "pending"
+                )
             }
+
+            return AddressInfo(
+                address: utxo.addrStr ?? address,
+                balance: confirmed,
+                unconfirmedBalance: unconfirmed,
+                totalReceived: 0,
+                totalSent: 0,
+                transactionCount: utxo.txApperances ?? 0,
+                transactions: txs
+            )
         } catch {
             print("Flux API error: \(error)")
+            return nil
         }
-        
+    }
+
+    // MARK: - RunOnFlux Aggregator
+    private func getBalanceFromAggregator(address: String) async -> AddressInfo? {
+        // Try path variant returning satoshis in data
+        if let url = URL(string: "\(apiBase)/explorer/balance/\(address)") {
+            if let info = await fetchAggregatorBalance(url: url, method: "GET", body: nil, address: address) {
+                return info
+            }
+        }
+        // Try GET with query first
+        if let url = URL(string: "\(apiBase)/explorer/balance?address=\(address)") {
+            if let info = await fetchAggregatorBalance(url: url, method: "GET", body: nil, address: address) {
+                return info
+            }
+        }
+        // Fallback to POST JSON
+        if let url = URL(string: "\(apiBase)/explorer/balance") {
+            let payload = try? JSONSerialization.data(withJSONObject: ["address": address])
+            if let info = await fetchAggregatorBalance(url: url, method: "POST", body: payload, address: address) {
+                return info
+            }
+        }
+        return nil
+    }
+
+    private func fetchAggregatorBalance(url: URL, method: String, body: Data?, address: String) async -> AddressInfo? {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        if body != nil { req.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        req.httpBody = body
+        do {
+            let (data, response) = try await URLSession.shared.data(for: req)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            // Flexible parsing: {status, data:{balance}} or {balance} or number
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let balance = parseBalance(json: obj)
+                if let bal = balance {
+                    return AddressInfo(
+                        address: address,
+                        balance: bal,
+                        unconfirmedBalance: 0.0,
+                        totalReceived: 0.0,
+                        totalSent: 0.0,
+                        transactionCount: 0,
+                        transactions: []
+                    )
+                }
+            } else if let s = String(data: data, encoding: .utf8), let bal = Double(s.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return AddressInfo(address: address, balance: bal, unconfirmedBalance: 0.0, totalReceived: 0.0, totalSent: 0.0, transactionCount: 0, transactions: [])
+            }
+        } catch {
+            print("Flux aggregator error: \(error)")
+        }
+        return nil
+    }
+
+    private func parseBalance(json: [String: Any]) -> Double? {
+        // Numeric data (satoshis)
+        if let n = json["data"] as? NSNumber { return n.doubleValue / 100_000_000.0 }
+        if let d = json["data"] as? Double { return d / 100_000_000.0 }
+        if let i = json["data"] as? Int { return Double(i) / 100_000_000.0 }
+        // Look for data.balance
+        if let data = json["data"] as? [String: Any] {
+            if let bal = data["balance"] as? Double { return bal }
+            if let balStr = data["balance"] as? String { return Double(balStr) }
+        }
+        // Look for top-level balance
+        if let bal = json["balance"] as? Double { return bal }
+        if let balStr = json["balance"] as? String { return Double(balStr) }
+        // Look for satoshi and convert
+        if let data = json["data"] as? [String: Any], let sat = data["balanceSat"] as? Double { return sat / 100_000_000.0 }
+        if let sat = json["balanceSat"] as? Double { return sat / 100_000_000.0 }
         return nil
     }
     
@@ -328,6 +443,30 @@ class FluxAPI: BlockchainAPIProtocol {
             timestamp: Date()
         )
     }
+}
+
+// Minimal Flux addr model to parse explorer responses
+private struct FluxAddrInfo: Codable {
+    let addrStr: String?
+    let balanceSat: Int64?
+    let unconfirmedBalanceSat: Int64?
+    let txApperances: Int?
+    let transactions: [FluxTx]?
+}
+
+private struct FluxTx: Codable {
+    let txid: String?
+    let amount: Double?
+    let fee: Double?
+    let confirmations: Int?
+    let time: Int?
+    let blockheight: Int?
+    let inputs: [FluxIO]?
+    let outputs: [FluxIO]?
+}
+
+private struct FluxIO: Codable {
+    let address: String?
 }
 
 // MARK: - Flux API Models

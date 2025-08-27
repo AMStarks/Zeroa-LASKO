@@ -150,7 +150,7 @@ class AssistantService: ObservableObject {
             let mockData = [
                 "timestamp": ISO8601DateFormatter().string(from: Date()),
                 "event": "mock_usage",
-                "user_id": WalletService.shared.loadAddress() ?? "unknown",
+                "user_id": WalletService.shared.loadAddress() ?? "",
                 "app_activity": "ai_interaction"
             ]
             print("Mock stream data: \(mockData)")

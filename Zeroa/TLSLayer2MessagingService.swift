@@ -59,7 +59,7 @@ class TLSLayer2MessagingService: ObservableObject {
     }
     
     private func connectWebSocket() {
-        guard let url = URL(string: "\(wsURL)/\(walletService.loadAddress() ?? "unknown")") else {
+        guard let url = URL(string: "\(wsURL)/\(walletService.loadAddress() ?? "")") else {
             print("❌ Invalid WebSocket URL")
             return
         }

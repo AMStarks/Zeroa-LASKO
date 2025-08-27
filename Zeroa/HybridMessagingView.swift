@@ -1433,8 +1433,8 @@ struct P2PSettingsView: View {
             }
         }
         .onAppear {
-            // Load user's TLS address from wallet service
-            tlsAddress = WalletService.shared.loadAddress() ?? "TBAAC630358DF8701F057728F1A186606B"
+            // Load user's TLS address from wallet service without fallback
+            tlsAddress = WalletService.shared.loadAddress() ?? ""
         }
         .alert("Copied!", isPresented: $showCopiedAlert) {
             Button("OK") { }

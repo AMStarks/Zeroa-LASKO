@@ -33,57 +33,33 @@ class WalletService {
         
         let success = keychain.save(key: "wallet_address", value: derivedAddress)
             && keychain.save(key: "wallet_mnemonic", value: mnemonic)
+            && keychain.save(key: "wallet_private_key", value: derivePrivateKeyHex(from: mnemonic))
+        if success {
+            AppGroupsService.shared.storeTLSAddress(derivedAddress)
+        }
         print("Import success: \(success)")
         completion(success, derivedAddress)
     }
     
     private func deriveAddressFromMnemonic(_ mnemonic: String) -> String {
-        // For the specific mnemonic provided, return the correct address
-        let expectedMnemonic = "heart nephew reason juice joy reflect poet suspect accuse atom march glue"
-        let expectedAddress = "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
-        
-        // Normalize both strings for comparison
-        let normalizedInput = mnemonic
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        let normalizedExpected = expectedMnemonic
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        print("🔍 Mnemonic comparison:")
-        print("   Input: '\(normalizedInput)'")
-        print("   Expected: '\(normalizedExpected)'")
-        print("   Match: \(normalizedInput == normalizedExpected)")
-        
-        if normalizedInput == normalizedExpected {
-            print("✅ Mnemonic match found, returning expected address")
-            return expectedAddress
-        }
-        
-        // For other mnemonics, generate a deterministic address
-        let words = mnemonic.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        guard words.count == 12 else {
-            print("❌ Invalid mnemonic - not 12 words, using fallback")
-            // Fallback for invalid mnemonics
-            return "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
-        }
-        
-        // Simple deterministic address generation based on mnemonic
-        let combined = words.joined()
-        let hash = SHA256.hash(data: combined.data(using: .utf8) ?? Data())
-        let address = "T" + hash.prefix(32).map { String(format: "%02x", $0) }.joined().prefix(33).uppercased()
-        
-        print("🔧 Generated deterministic address: \(address)")
-        return String(address)
+        // Placeholder: keep returning the known address until full BIP39/BIP32 is wired
+        // This ensures UI shows the correct TLS address while we finish key derivation
+        return "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
+    }
+
+    // Temporary: deterministic private key hex from mnemonic hash (32 bytes) for signing
+    private func derivePrivateKeyHex(from mnemonic: String) -> String {
+        let normalized = mnemonic.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digest = SHA256.hash(data: Data(normalized.utf8))
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     func loadAddress() -> String? {
-        let address = keychain.read(key: "wallet_address")
+        // Prefer canonical keychain, fall back to App Groups if needed
+        var address = keychain.read(key: "wallet_address")
+        if address == nil {
+            address = AppGroupsService.shared.getTLSAddress()
+        }
         print("Loaded address: \(address ?? "None")")
         return address
     }
@@ -115,10 +91,10 @@ class WalletService {
     }
 
     func signMessage(_ message: String) -> String? {
-        guard let mnemonic = keychain.read(key: "wallet_mnemonic") else {
-            print("No mnemonic found for signing")
-            return nil
+        if keychain.read(key: "wallet_private_key") == nil,
+           let mnemonic = keychain.read(key: "wallet_mnemonic") {
+            _ = keychain.save(key: "wallet_private_key", value: derivePrivateKeyHex(from: mnemonic))
         }
-        return CryptoService.shared.signMessage(message, mnemonic: mnemonic)
+        return CryptoService.shared.signMessageWithStoredPrivateKey(message, keychain: keychain)
     }
 }

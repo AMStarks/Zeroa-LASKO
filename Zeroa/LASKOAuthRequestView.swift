@@ -109,7 +109,7 @@ struct LASKOAuthRequestView: View {
     }
     
     private func getCurrentAddress() -> String {
-        return WalletService.shared.loadAddress() ?? "Unknown"
+        return WalletService.shared.loadAddress() ?? ""
     }
     
     private func handleLASKOAuthResponse(approved: Bool) {

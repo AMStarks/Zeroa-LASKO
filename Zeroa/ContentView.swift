@@ -667,7 +667,7 @@ struct HomeView: View {
         if walletService.loadAddress() != nil {
             // For now, use mock balance - can be expanded with real Bitcoin service
             await MainActor.run {
-                self.coinBalance = 0.5 // Mock Bitcoin balance
+                self.coinBalance = 0.0
             }
             
             // Load real price data from CoinGecko
@@ -868,7 +868,7 @@ struct HomeView: View {
         if walletService.loadAddress() != nil {
             // For now, use mock balance - can be expanded with real Litecoin service
             await MainActor.run {
-                self.coinBalance = 25.0 // Mock Litecoin balance
+                self.coinBalance = 0.0
             }
             
             // Load real price data from CoinGecko
@@ -1065,19 +1065,19 @@ struct HomeView: View {
     }
     
     private func loadFluxData() async {
-        // Load Flux balance and price
-        if walletService.loadAddress() != nil {
-            // For now, use mock balance - can be expanded with real Flux service
-            await MainActor.run {
-                self.coinBalance = 1500.0 // Mock Flux balance
-            }
-            
-            // Load real price data from CoinGecko
-            await loadFluxPrice()
-            
-            // Load price history for chart
-            await loadFluxPriceHistory()
+        // Load Flux balance (App Groups address) and price
+        let fluxAddr = AppGroupsService.shared.getFluxAddress()
+        if let addr = fluxAddr, !addr.isEmpty {
+            let fluxService = FluxService()
+            let bal = await fluxService.getBalance(address: addr)
+            await MainActor.run { self.coinBalance = bal.total }
+        } else {
+            await MainActor.run { self.coinBalance = 0.0 }
         }
+        // Load real price data from CoinGecko
+        await loadFluxPrice()
+        // Load price history for chart
+        await loadFluxPriceHistory()
     }
     
     private func loadFluxPrice() async {
@@ -1270,7 +1270,7 @@ struct HomeView: View {
         if walletService.loadAddress() != nil {
             // For now, use mock balance - can be expanded with real Kaspa service
             await MainActor.run {
-                self.coinBalance = 50000.0 // Mock Kaspa balance
+                self.coinBalance = 0.0
             }
             
             // Load real price data from CoinGecko
@@ -1470,9 +1470,8 @@ struct HomeView: View {
     private func loadUSDTData() async {
         // Load USDT balance and price
         if walletService.loadAddress() != nil {
-            // For now, use mock balance - can be expanded with real USDT service
             await MainActor.run {
-                self.coinBalance = 1000.0 // Mock USDT balance
+                self.coinBalance = 0.0
             }
             
             // Load real price data from CoinGecko
@@ -1641,9 +1640,8 @@ struct HomeView: View {
     private func loadUSDCData() async {
         // Load USDC balance and price
         if walletService.loadAddress() != nil {
-            // For now, use mock balance - can be expanded with real USDC service
             await MainActor.run {
-                self.coinBalance = 2500.0 // Mock USDC balance
+                self.coinBalance = 0.0
             }
             
             // Load real price data from CoinGecko
@@ -1814,17 +1812,17 @@ struct HomeView: View {
         case "Telestai":
             return tlsBalance
         case "Bitcoin":
-            return 0.5 // Mock balance
+            return 0.0
         case "USDT":
-            return 1000.0 // Mock balance
+            return 0.0
         case "USDC":
-            return 2500.0 // Mock balance
+            return 0.0
         case "Litecoin":
-            return 25.0 // Mock balance
+            return 0.0
         case "Flux":
-            return 1500.0 // Mock balance - fixed to match selected coin view
+            return coinBalance
         case "Kaspa":
-            return 50000.0 // Mock balance
+            return 0.0
         default:
             return 0.0
         }
@@ -1835,17 +1833,17 @@ struct HomeView: View {
         case "Telestai":
             return tlsPrice
         case "Bitcoin":
-            return 118258.0 // Updated to current market price
+            return coinPrice
         case "USDT":
-            return 1.0 // Mock price
+            return coinPrice
         case "USDC":
-            return 1.0 // Mock price
+            return coinPrice
         case "Litecoin":
-            return 75.0 // Mock price
+            return coinPrice
         case "Flux":
-            return 0.5 // Mock price
+            return coinPrice
         case "Kaspa":
-            return 0.12 // Mock price
+            return coinPrice
         default:
             return 0.0
         }
@@ -2473,8 +2471,7 @@ struct HomeView: View {
            let addressInfo = await tlsService.getAddressInfo(address: address) {
             tlsBalance = addressInfo.balance
         } else {
-            // Fallback to mock balance for testing
-            tlsBalance = 20000.0
+            tlsBalance = 0.0
         }
         
         // Load real price data from CoinGecko
@@ -3539,7 +3536,7 @@ struct ProfileView: View {
                                                 .font(DesignSystem.Typography.caption)
                                                 .foregroundColor(DesignSystem.Colors.textSecondary)
                                             
-                                            Text(formatAddress(walletService.loadAddress() ?? "Not set"))
+                                            Text(formatAddress(walletService.loadAddress() ?? ""))
                                                 .font(DesignSystem.Typography.bodyMedium)
                                                 .foregroundColor(DesignSystem.Colors.text)
                                                 .multilineTextAlignment(.center)

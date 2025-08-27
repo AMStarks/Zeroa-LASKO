@@ -93,24 +93,38 @@ class TLSBlockchainService: ObservableObject {
     }
     
     func getAddressInfo(address: String) async -> TLSAddress? {
-        guard let url = URL(string: "\(baseURL)/address/\(address)") else { return nil }
-        
+        // Use explorer getaddress endpoint: /api/getaddress/?address={address}
+        guard let url = URL(string: "\(baseURL)/getaddress/?address=\(address)") else { return nil }
+        struct TxItem: Decodable { let tx_time: Int; let block_ix: Int; let txid: String; let amount: String; let is_reward: Bool }
+        struct AddressResp: Decodable { let timestamp: Int64; let address: String; let balance: String; let received: String?; let sent: String?; let groupid: String?; let last_txs: [TxItem]? }
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
-                let addressInfo = try JSONDecoder().decode(TLSAddress.self, from: data)
-                await MainActor.run {
-                    self.currentBalance = addressInfo.balance
-                    self.recentTransactions = addressInfo.transactions
-                }
-                return addressInfo
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            let resp = try JSONDecoder().decode(AddressResp.self, from: data)
+            let bal = Double(resp.balance) ?? 0.0
+            let txs: [TLSTransaction] = (resp.last_txs ?? []).map { t in
+                TLSTransaction(
+                    txid: t.txid,
+                    amount: Double(t.amount) ?? 0.0,
+                    fee: 0.0,
+                    confirmations: 0,
+                    timestamp: t.tx_time,
+                    type: t.is_reward ? "reward" : "receive",
+                    from: nil,
+                    to: address,
+                    message: nil,
+                    messageType: nil
+                )
             }
+            await MainActor.run {
+                self.currentBalance = bal
+                self.recentTransactions = txs
+            }
+            return TLSAddress(address: resp.address, balance: bal, transactions: txs)
         } catch {
-            print("Error fetching address info: \(error)")
+            print("Error fetching TLS address info: \(error)")
+            return nil
         }
-        
-        return nil
     }
     
     // MARK: - Enhanced Payment with Message Support

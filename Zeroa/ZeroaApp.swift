@@ -70,9 +70,10 @@ struct ZeroaApp: App {
         print("⏰ Starting LASKO request timer...")
         stopLASKORequestTimer() // Stop any existing timer
         
-        // Add a timer to actively check for LASKO requests (backed off to reduce churn)
+        // Add a timer to actively check for LASKO requests and background handshakes (token refresh, post-sign)
         laskoCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             checkForPendingLASKORequests()
+            handleBackgroundHandshakes()
         }
         print("✅ LASKO request timer started (checking every 1 second)")
     }
@@ -119,7 +120,9 @@ struct ZeroaApp: App {
         // Token refresh request from LASKO
         if AppGroupsService.shared.hasTokenRefreshRequest() {
             Task {
+                print("🔁 Zeroa: Received halo_token_refresh_request → ensuring token...")
                 await HaloService.shared.ensureToken()
+                print("✅ Zeroa: Token refresh attempt complete; marking halo_token_refreshed_at and clearing request")
                 AppGroupsService.shared.markTokenRefreshed()
                 AppGroupsService.shared.clearTokenRefreshRequest()
             }

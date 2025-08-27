@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  zeroa-messaging:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - TLS_API_URL=https://telestai.cryptoscope.io/api
+      - REDIS_URL=redis://redis:6379
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your_32_character_encryption_key_here}
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./logs:/opt/zeroa-messaging/logs
+      - ./data:/opt/zeroa-messaging/data
+    restart: unless-stopped
+    networks:
+      - zeroa-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - zeroa-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=zeroa
+      - POSTGRES_USER=zeroa
+      - POSTGRES_PASSWORD=your_secure_password_here
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - zeroa-network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - zeroa-messaging
+    restart: unless-stopped
+    networks:
+      - zeroa-network
+
+volumes:
+  redis_data:
+  postgres_data:
+
+networks:
+  zeroa-network:
+    driver: bridge 
