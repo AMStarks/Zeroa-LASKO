@@ -360,6 +360,9 @@ struct ModernFeedView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100) // Extra padding for floating button
                     }
+                    .refreshable {
+                        await laskoService.fetchPosts()
+                    }
                     // If unauthenticated, show a small inline banner but still show feed
                     if !laskoService.isAuthenticatedWithZeroa {
                         HStack(spacing: 10) {

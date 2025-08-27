@@ -3,6 +3,7 @@ import SwiftUI
 struct ModernPostComposerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @StateObject private var laskoService = LASKOService.shared
     @State private var content = "" // legacy
     @State private var author = "User"
     @State private var selectedImages: [UIImage] = []
@@ -44,7 +45,7 @@ struct ModernPostComposerView: View {
                             Task {
                                 let plain = attributedText.string
                                 if plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false && plain.count <= 1000 {
-                                    _ = await LASKOService().createPost(content: plain)
+                                    _ = await laskoService.createPost(content: plain)
                                     dismiss()
                                 }
                             }

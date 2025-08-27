@@ -32,6 +32,11 @@ struct PostView: View {
                 .font(.body)
                 .foregroundColor(.primary)
             
+            // Show LAS sequential code for verification
+            Text("LAS: \(post.id)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.secondary)
+            
             HStack {
                 Button(action: {
                     // Handle like
@@ -47,7 +52,7 @@ struct PostView: View {
                 Spacer()
                 
                 Button(action: {
-                    // Handle comment
+                    // Navigate to comments handled by parent
                 }) {
                     HStack {
                         Image(systemName: "message")
