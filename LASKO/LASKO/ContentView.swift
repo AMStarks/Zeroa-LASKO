@@ -11,8 +11,8 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Theme-aware background
-                LASKDesignSystem.Colors.background
+                // Force dark mode background for welcome screen
+                Color(red: 0.15, green: 0.15, blue: 0.15) // Charcoal background
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -28,10 +28,10 @@ struct ContentView: View {
                                 .shadow(color: Color(red: 1.0, green: 0.6, blue: 0.0).opacity(0.3), radius: 15, x: 0, y: 8)
                         }
                         
-                        // Modern tagline (thinner)
+                        // Modern tagline (thinner) - force white text
                         Text("Decentralized Social Media")
                             .font(.system(size: 16, weight: .regular, design: .default))
-                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
+                            .foregroundColor(.white.opacity(0.7)) // Force white with opacity
                             .tracking(0.4)
                         
                         // Authentication status
@@ -92,7 +92,7 @@ struct ContentView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.8))
+                            .background(Color(red: 0.1, green: 0.1, blue: 0.1).opacity(0.8)) // Force dark background
                             .cornerRadius(20)
                             .onTapGesture {
                                 showApprovalSheet = true
@@ -102,7 +102,7 @@ struct ContentView: View {
                     .padding(.top, 60)
                     .offset(y: -24)
                     
-                    // Modern feature cards with glassmorphism
+                    // Modern feature cards with glassmorphism - force dark mode colors
                     VStack(spacing: 16) {
                         ModernFeatureCard(
                             icon: "message.circle.fill",
@@ -170,11 +170,11 @@ struct ContentView: View {
                         }
                         .disabled(authUIState.step == .waiting)
                         
-                        // Telestai footer
+                        // Telestai footer - force white text
                         VStack(spacing: 6) {
                             Text("Part of the Telestai Ecosystem")
                                 .font(.system(size: 12, weight: .regular))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.white.opacity(0.6)) // Force white with opacity
                                 .multilineTextAlignment(.center)
                             Image("TelestaiLogo")
                                 .resizable()

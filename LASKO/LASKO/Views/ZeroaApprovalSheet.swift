@@ -17,12 +17,11 @@ struct ZeroaApprovalSheet: View {
             
             Text(showingApproved ? "Approved" : "Connect with Zeroa")
                 .font(.title2).bold()
-                .foregroundColor(.white)
             
             Text(showingApproved ? "You're connected to Zeroa."
                  : "Approve this request in Zeroa to let LASKO access your TLS address and post on your behalf.")
                 .multilineTextAlignment(.center)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.secondary)
                 .padding(.horizontal, 16)
             
             if !showingApproved {
@@ -56,7 +55,6 @@ struct ZeroaApprovalSheet: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    .foregroundColor(.white)
                 }
                 .padding(.top, 6)
             }
@@ -64,7 +62,6 @@ struct ZeroaApprovalSheet: View {
             Spacer(minLength: 8)
         }
         .padding(20)
-        .background(Color(red: 0.15, green: 0.15, blue: 0.15)) // Force charcoal background
         .presentationDetents([.height(320), .medium])
         .presentationDragIndicator(.visible)
         .onAppear {
