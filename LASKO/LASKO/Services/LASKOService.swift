@@ -33,7 +33,9 @@ class LASKOService: ObservableObject {
     @Published var repliesByCode: [String: [Post]] = [:]
     @Published var username: String = UserDefaults.standard.string(forKey: "lasko_username") ?? generateRandomUsername() {
         didSet {
+            print("🔍 LASKO: Username changed to: \(username)")
             UserDefaults.standard.set(username, forKey: "lasko_username")
+            print("🔍 LASKO: Username saved to UserDefaults")
         }
     }
     
@@ -94,6 +96,8 @@ class LASKOService: ObservableObject {
     
     init() {
         // Do not auto-check authentication on init; allow explicit user-triggered flow
+        print("🔍 LASKO: LASKOService initialized with username: \(username)")
+        print("🔍 LASKO: UserDefaults username: \(UserDefaults.standard.string(forKey: "lasko_username") ?? "nil")")
     }
     
     // MARK: - Zeroa Integration
