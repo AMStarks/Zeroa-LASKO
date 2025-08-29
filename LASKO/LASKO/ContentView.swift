@@ -6,12 +6,13 @@ struct ContentView: View {
     @EnvironmentObject var laskoService: LASKOService
     @EnvironmentObject private var authUIState: AuthUIState
     @State private var showApprovalSheet = false
+    @StateObject private var themeManager = LASKThemeManager.shared
     
     var body: some View {
         NavigationView {
             ZStack {
-                // Charcoal background
-                Color(red: 0.15, green: 0.15, blue: 0.15)
+                // Theme-aware background
+                LASKDesignSystem.Colors.background
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -30,7 +31,7 @@ struct ContentView: View {
                         // Modern tagline (thinner)
                         Text("Decentralized Social Media")
                             .font(.system(size: 16, weight: .regular, design: .default))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             .tracking(0.4)
                         
                         // Authentication status
@@ -91,8 +92,11 @@ struct ContentView: View {
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color.orange.opacity(0.2))
+                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.8))
                             .cornerRadius(20)
+                            .onTapGesture {
+                                showApprovalSheet = true
+                            }
                         }
                     }
                     .padding(.top, 60)
@@ -291,8 +295,8 @@ struct ModernFeedView: View {
     
     var body: some View {
         ZStack {
-            // Charcoal background
-            Color(red: 0.15, green: 0.15, blue: 0.15)
+            // Theme-aware background
+            LASKDesignSystem.Colors.background
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -302,7 +306,7 @@ struct ModernFeedView: View {
                     NavigationLink(destination: ModernProfileView()) {
                         Image(systemName: "person.circle.fill")
                             .font(.system(size: 36))
-                            .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.0))
+                            .foregroundColor(LASKDesignSystem.Colors.primary)
                     }
                     
                     Spacer()
@@ -320,7 +324,7 @@ struct ModernFeedView: View {
                     Button(action: { withAnimation(.easeInOut(duration: 0.25)) { showSideMenu = true } }) {
                         Image(systemName: "line.3.horizontal")
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(LASKDesignSystem.Colors.text)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -335,7 +339,7 @@ struct ModernFeedView: View {
                 if laskoService.isLoading {
                     Spacer()
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 1.0, green: 0.6, blue: 0.0)))
+                        .progressViewStyle(CircularProgressViewStyle(tint: LASKDesignSystem.Colors.primary))
                         .scaleEffect(1.5)
                     Spacer()
                 } else {
@@ -485,8 +489,8 @@ struct ModernPostCard: View {
                             AsyncImage(url: url) { img in
                                 img.resizable().scaledToFill()
                             } placeholder: {
-                                Circle()
-                                    .fill(Color.white.opacity(0.08))
+                                                            Circle()
+                                .fill(LASKDesignSystem.Colors.cardBackground.opacity(0.3))
                             }
                             .frame(width: 29, height: 29)
                             .clipShape(Circle())
@@ -514,13 +518,13 @@ struct ModernPostCard: View {
                         HStack(spacing: 8) {
                             Text(laskoService.getDisplayName(for: post.author))
                                 .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(LASKDesignSystem.Colors.text)
                                 .onAppear {
                                     print("🔍 UI: Displaying username for post \(post.id): \(laskoService.getDisplayName(for: post.author)) (author: \(post.author))")
                                 }
                             Text(timeAgoString(from: post.timestamp))
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                         }
                         
                         Spacer()
@@ -534,12 +538,12 @@ struct ModernPostCard: View {
                         }
                     }
                     
-                    // Post content
-                    Text(post.content)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                                            // Post content
+                        Text(post.content)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundColor(LASKDesignSystem.Colors.text)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                     
                     // Post actions (evenly spaced across the card) - WITHOUT THREE DOTS
@@ -557,10 +561,10 @@ struct ModernPostCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "message")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.6))
+                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : LASKDesignSystem.Colors.textSecondary)
                                 Text("\(post.replies)")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.9))
+                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : LASKDesignSystem.Colors.text)
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -572,10 +576,10 @@ struct ModernPostCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "megaphone")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                                    .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.textSecondary)
                                 Text("0")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.9))
+                                    .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.text)
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -591,10 +595,10 @@ struct ModernPostCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: isLiked ? "flame.fill" : "flame")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                                    .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.textSecondary)
                                 Text("\(likesCount)")
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(isLiked ? .red : .white.opacity(0.9))
+                                    .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.text)
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -618,7 +622,7 @@ struct ModernPostCard: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "ellipsis")
                                     .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(selectedPostID == post.id ? .orange : .white.opacity(0.6))
+                                    .foregroundColor(selectedPostID == post.id ? .orange : LASKDesignSystem.Colors.textSecondary)
                                 Text("")
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(.clear)
@@ -636,24 +640,24 @@ struct ModernPostCard: View {
                                     HStack {
                                         Text(laskoService.getDisplayName(for: r.author))
                                             .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.white)
+                                            .foregroundColor(LASKDesignSystem.Colors.text)
                                         Spacer()
                                         Text(timeAgoString(from: r.timestamp))
                                             .font(.system(size: 11, weight: .regular))
-                                            .foregroundColor(.white.opacity(0.6))
+                                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                     }
                                     Text(r.content)
                                         .font(.system(size: 14))
-                                        .foregroundColor(.white.opacity(0.95))
+                                        .foregroundColor(LASKDesignSystem.Colors.text)
                                 }
                                 .padding(10)
-                                .background(Color.white.opacity(0.04))
+                                .background(LASKDesignSystem.Colors.cardBackground.opacity(0.3))
                                 .cornerRadius(10)
                             }
                         } else {
                             Text("No replies yet.")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                         }
                         // Inline reply composer
                         HStack(spacing: 8) {
@@ -680,7 +684,7 @@ struct ModernPostCard: View {
             .padding(.vertical, 16)
             .background(
                 Rectangle()
-                    .fill(Color.white.opacity(0.05))
+                    .fill(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
             )
             .onAppear {
                 // Initialize local state from the incoming post
@@ -691,12 +695,12 @@ struct ModernPostCard: View {
         .buttonStyle(PlainButtonStyle())
         .background(
             Rectangle()
-                .fill(Color.white.opacity(0.05))
+                .fill(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
         )
         .overlay(
             Rectangle()
                 .frame(height: 1)
-                .foregroundColor(Color.orange.opacity(0.6)),
+                .foregroundColor(LASKDesignSystem.Colors.divider),
             alignment: .bottom
         )
     }
@@ -725,7 +729,7 @@ struct TelestaiRewardActionButton: View {
     @State private var showReward = false
     private let gold = Color(red: 156/255, green: 152/255, blue: 118/255) // #9C9876
     @State private var isActive = false
-    private let inactiveColor = Color.white.opacity(0.6)
+    private let inactiveColor = LASKDesignSystem.Colors.textSecondary
     
     var body: some View {
         HStack(spacing: 6) {
@@ -789,7 +793,7 @@ struct ModernProfileView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.15, green: 0.15, blue: 0.15)
+            LASKDesignSystem.Colors.background
                 .ignoresSafeArea()
             
             ScrollView {
@@ -806,9 +810,9 @@ struct ModernProfileView: View {
                         }) {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(LASKDesignSystem.Colors.text)
                                 .frame(width: 32, height: 32)
-                                .background(Color.black.opacity(0.3))
+                                .background(LASKDesignSystem.Colors.cardBackground.opacity(0.8))
                                 .clipShape(Circle())
                         }
                         .padding(.trailing, 16)
@@ -845,7 +849,7 @@ struct ModernProfileView: View {
                                     
                                     Text("U")
                                         .font(.system(size: 24, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(LASKDesignSystem.Colors.text)
                                 }
                                 
                                 // Profile image picker button
@@ -854,9 +858,9 @@ struct ModernProfileView: View {
                                 }) {
                                     Image(systemName: "camera.fill")
                                         .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(LASKDesignSystem.Colors.text)
                                         .frame(width: 20, height: 20)
-                                        .background(Color.black.opacity(0.6))
+                                        .background(LASKDesignSystem.Colors.cardBackground.opacity(0.8))
                                         .clipShape(Circle())
                                 }
                             }
@@ -866,7 +870,7 @@ struct ModernProfileView: View {
                                 HStack(spacing: 8) {
                                     Text(laskoService.username)
                                         .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.white)
+                                        .foregroundColor(LASKDesignSystem.Colors.text)
                                     
                                     // Edit name button
                                     Button(action: {
@@ -874,7 +878,7 @@ struct ModernProfileView: View {
                                     }) {
                                         Image(systemName: "pencil")
                                             .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.7))
+                                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                     }
                                     
                                     // User rank badge
@@ -886,7 +890,7 @@ struct ModernProfileView: View {
                                 
                                 Text(tlsAddress.isEmpty ? (laskoService.currentTLSAddress ?? "") : tlsAddress)
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             }
                             
                             Spacer()
@@ -899,7 +903,7 @@ struct ModernProfileView: View {
                             HStack {
                                 Text("Bio")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(LASKDesignSystem.Colors.text)
                                 
                                 Spacer()
                                 
@@ -908,13 +912,13 @@ struct ModernProfileView: View {
                                 }) {
                                     Image(systemName: "pencil")
                                         .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.7))
+                                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                 }
                             }
                             
                             Text(bio)
                                 .font(.system(size: 14, weight: .regular))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                 .lineLimit(3)
                         }
                         .padding(.horizontal, 20)
@@ -924,28 +928,28 @@ struct ModernProfileView: View {
                             HStack(spacing: 4) {
                                 Text("0")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(LASKDesignSystem.Colors.text)
                                 Text("Posts")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             }
                             
                             HStack(spacing: 4) {
                                 Text("0")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(LASKDesignSystem.Colors.text)
                                 Text("Following")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             }
                             
                             HStack(spacing: 4) {
                                 Text("0")
                                     .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(LASKDesignSystem.Colors.text)
                                 Text("Followers")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -1028,7 +1032,7 @@ struct NameEditorView: View {
             VStack(spacing: 20) {
                 Text("Edit Username")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(LASKDesignSystem.Colors.text)
                 
                 TextField("Username", text: $tempUsername)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -1041,20 +1045,20 @@ struct NameEditorView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 12)
-                .background(Color.orange)
+                .background(LASKDesignSystem.Colors.primary)
                 .cornerRadius(8)
                 
                 Spacer()
             }
             .padding()
-            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
+            .background(LASKDesignSystem.Colors.background)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(LASKDesignSystem.Colors.primary)
                 }
             }
         }
@@ -1077,12 +1081,12 @@ struct BioEditorView: View {
             VStack(spacing: 20) {
                 Text("Edit Bio")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(LASKDesignSystem.Colors.text)
                 
                 TextEditor(text: $tempBio)
                     .frame(height: 100)
                     .padding(8)
-                    .background(Color.white.opacity(0.1))
+                    .background(LASKDesignSystem.Colors.cardBackground.opacity(0.3))
                     .cornerRadius(8)
                     .padding(.horizontal, 20)
                 
@@ -1093,7 +1097,7 @@ struct BioEditorView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 30)
                 .padding(.vertical, 12)
-                .background(Color.orange)
+                .background(LASKDesignSystem.Colors.primary)
                 .cornerRadius(8)
                 
                 Spacer()
@@ -1249,6 +1253,7 @@ struct LASKOSideMenuView: View {
     let openSubscription: () -> Void
     let openSettings: () -> Void
     let openSupport: () -> Void
+    @StateObject private var themeManager = LASKThemeManager.shared
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -1256,34 +1261,37 @@ struct LASKOSideMenuView: View {
                 HStack {
                     Text("Menu")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(LASKDesignSystem.Colors.text)
                     Spacer()
                     Button(action: close) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(LASKDesignSystem.Colors.border)
 
                 Group {
                     sideRowAsset(title: "FluxDrive Storage", assetName: "FluxIcon", action: openFluxDrive)
                     sideRow(title: "Subscription", systemImage: "lock.shield", action: openSubscription)
                     sideRow(title: "Settings", systemImage: "gearshape.fill", action: openSettings)
                     sideRow(title: "Support & Help", systemImage: "questionmark.circle.fill", action: openSupport)
+                    sideRow(title: "Theme: \(themeManager.currentTheme)", systemImage: "paintbrush.fill", action: {
+                        themeManager.currentTheme = themeManager.currentTheme == "Light" ? "Dark" : "Light"
+                    })
                 }
                 .padding(.top, 6)
 
                 Spacer()
             }
             .frame(width: 280)
-            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
+            .background(LASKDesignSystem.Colors.background)
             .overlay(
                 RoundedRectangle(cornerRadius: 0)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(LASKDesignSystem.Colors.border, lineWidth: 1)
             )
         }
     }
@@ -1294,13 +1302,13 @@ struct LASKOSideMenuView: View {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.0))
+                    .foregroundColor(LASKDesignSystem.Colors.primary)
                 Text(title)
-                    .foregroundColor(.white)
+                    .foregroundColor(LASKDesignSystem.Colors.text)
                     .font(.system(size: 16, weight: .medium))
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -1318,11 +1326,11 @@ struct LASKOSideMenuView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 18, height: 18)
                 Text(title)
-                    .foregroundColor(.white)
+                    .foregroundColor(LASKDesignSystem.Colors.text)
                     .font(.system(size: 16, weight: .medium))
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)

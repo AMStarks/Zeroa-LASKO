@@ -37,16 +37,16 @@ struct CommentsView: View {
                                 HStack {
                                     Text(laskoService.getDisplayName(for: promoted.author))
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.8))
+                                        .foregroundColor(LASKDesignSystem.Colors.text)
                                     Spacer()
                                     Text(formatTimestamp(promoted.timestamp))
                                         .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.6))
+                                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                 }
                                 
                                 Text(promoted.content)
                                     .font(.system(size: 14, weight: .regular))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(LASKDesignSystem.Colors.text)
                                     .multilineTextAlignment(.leading)
                                 
                                 // Action buttons for promoted comment
@@ -60,7 +60,7 @@ struct CommentsView: View {
                                             Text("Reply")
                                                 .font(.system(size: 12, weight: .medium))
                                         }
-                                        .foregroundColor(.white.opacity(0.6))
+                                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                     
@@ -78,14 +78,14 @@ struct CommentsView: View {
                                     }) {
                                         Image(systemName: "ellipsis")
                                             .font(.system(size: 12))
-                                            .foregroundColor(selectedPostID == promoted.id ? .orange : .white.opacity(0.6))
+                                            .foregroundColor(selectedPostID == promoted.id ? .orange : LASKDesignSystem.Colors.textSecondary)
                                             .frame(width: 24, height: 24)
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                 }
                             }
                             .padding(16)
-                            .background(Color.white.opacity(0.05))
+                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
                         }
                     } else if let originalPost = laskoService.posts.first(where: { $0.id == postId }) {
                         OriginalPostCard(post: originalPost)
@@ -147,7 +147,7 @@ struct CommentsView: View {
                                 }
                             } else {
                                 Text("No replies to this comment yet.")
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                     .padding()
                             }
                         } else {
@@ -188,13 +188,13 @@ struct CommentsView: View {
                         }
                     } else {
                         Text("No replies yet.")
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                             .padding()
                     }
                 }
                 .padding(.bottom, 100) // Extra padding for composer
             }
-            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
+            .background(LASKDesignSystem.Colors.background)
 
             // Composer at bottom
             VStack(spacing: 8) {
@@ -202,13 +202,13 @@ struct CommentsView: View {
                     HStack {
                         Text("Replying to \(laskoService.getDisplayName(for: replyingTo.author))")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.orange)
+                            .foregroundColor(LASKDesignSystem.Colors.primary)
                         Spacer()
                         Button("Cancel") {
                             replyingToComment = nil
                         }
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                     }
                     .padding(.horizontal, 16)
                 }
@@ -216,7 +216,7 @@ struct CommentsView: View {
                 HStack(spacing: 8) {
                     TextField(replyingToComment != nil ? "Write a reply…" : "Write a comment…", text: $replyText)
                         .textFieldStyle(.roundedBorder)
-                        .background(Color.white.opacity(0.1))
+                        .background(LASKDesignSystem.Colors.cardBackground.opacity(0.3))
                         .cornerRadius(8)
                     
                     Button(isPosting ? "Posting…" : "Post") {
@@ -226,15 +226,15 @@ struct CommentsView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.orange)
+                    .background(LASKDesignSystem.Colors.primary)
                     .cornerRadius(8)
                 }
                 .padding(.horizontal, 16)
             }
             .padding(.vertical, 12)
-            .background(Color(red: 0.12, green: 0.12, blue: 0.12))
+            .background(LASKDesignSystem.Colors.cardBackground)
         }
-        .background(Color(red: 0.15, green: 0.15, blue: 0.15))
+        .background(LASKDesignSystem.Colors.background)
         .onAppear {
             if let code = sequentialCode {
                 Task { await laskoService.fetchComments(forSequentialCode: code) }
@@ -261,7 +261,7 @@ struct CommentsView: View {
                         dismiss()
                     }
                 }
-                .foregroundColor(.orange)
+                .foregroundColor(LASKDesignSystem.Colors.primary)
             }
         }
     }
@@ -323,17 +323,17 @@ struct OriginalPostCard: View {
             HStack {
                 Text(laskoService.getDisplayName(for: post.author))
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(LASKDesignSystem.Colors.text)
                 Spacer()
                 Text(formatTimestamp(post.timestamp))
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(LASKDesignSystem.Colors.textSecondary)
             }
             
             // Post content
             Text(post.content)
                 .font(.system(size: 14, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(LASKDesignSystem.Colors.text)
                 .multilineTextAlignment(.leading)
             
             // Action bar with functionality
@@ -342,10 +342,10 @@ struct OriginalPostCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "message")
                         .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                     Text("\(post.replies)")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                 }
                 
                 // Broadcast button
@@ -360,10 +360,10 @@ struct OriginalPostCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: "megaphone")
                             .font(.system(size: 14))
-                            .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                            .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.textSecondary)
                         Text("\(broadcastCount)")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                            .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.textSecondary)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -377,10 +377,10 @@ struct OriginalPostCard: View {
                     HStack(spacing: 4) {
                         Image(systemName: isLiked ? "flame.fill" : "flame")
                             .font(.system(size: 14))
-                            .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                            .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.textSecondary)
                         Text("\(likesCount)")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                            .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.textSecondary)
                     }
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -403,7 +403,7 @@ struct OriginalPostCard: View {
                 }) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 14))
-                        .foregroundColor(selectedPostID == post.id ? .orange : .white.opacity(0.6))
+                        .foregroundColor(selectedPostID == post.id ? .orange : LASKDesignSystem.Colors.textSecondary)
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -456,17 +456,17 @@ struct CommentRow: View {
                     HStack {
                         Text(laskoService.getDisplayName(for: comment.author))
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(LASKDesignSystem.Colors.text)
                         Spacer()
                         Text(formatTimestamp(comment.timestamp))
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                     }
                     
                     // Comment content
                     Text(comment.content)
                         .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(.white)
+                        .foregroundColor(LASKDesignSystem.Colors.text)
                         .multilineTextAlignment(.leading)
                     
                     // Action buttons with functionality
@@ -481,7 +481,7 @@ struct CommentRow: View {
                                 Text("Reply")
                                     .font(.system(size: 12, weight: .medium))
                             }
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                         }
                         .buttonStyle(PlainButtonStyle())
                         
@@ -497,10 +497,10 @@ struct CommentRow: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "megaphone")
                                     .font(.system(size: 12))
-                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                                    .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.textSecondary)
                                 Text("\(broadcastCount)")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                                    .foregroundColor(isAnnounced ? .green : LASKDesignSystem.Colors.textSecondary)
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -514,10 +514,10 @@ struct CommentRow: View {
                             HStack(spacing: 4) {
                                 Image(systemName: isLiked ? "flame.fill" : "flame")
                                     .font(.system(size: 12))
-                                    .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                                    .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.textSecondary)
                                 Text("\(likesCount)")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                                    .foregroundColor(isLiked ? .red : LASKDesignSystem.Colors.textSecondary)
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -569,7 +569,7 @@ struct CommentRow: View {
                         }) {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 12))
-                                .foregroundColor(selectedPostID == comment.id ? .orange : .white.opacity(0.6))
+                                .foregroundColor(selectedPostID == comment.id ? .orange : LASKDesignSystem.Colors.textSecondary)
                                 .frame(width: 24, height: 24)
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -578,7 +578,7 @@ struct CommentRow: View {
             }
             .padding(.leading, CGFloat(depth * 16))
             .padding(16)
-            .background(Color.white.opacity(0.05))
+            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
 
             // No longer showing children inline - they'll be shown when comment is promoted
         }
