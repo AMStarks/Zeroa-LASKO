@@ -532,12 +532,12 @@ class LASKOService: ObservableObject {
         // Ensure auth
         guard let tls = (currentTLSAddress ?? appGroupsService.getTLSAddress()), !tls.isEmpty else { 
             print("❌ LASKO: fetchComments failed - no TLS address")
-            return 
+                return
         }
         guard let token = await ensureTokenForAddress(tls, timeoutSeconds: 5.0) else { 
             print("❌ LASKO: fetchComments failed - no token")
-            return 
-        }
+                    return
+                }
         
         // Fetch all comments for this post (including nested replies)
         await fetchAllNestedComments(forPostCode: code, token: token)
@@ -589,13 +589,13 @@ class LASKOService: ObservableObject {
                     // Reuse decoding helpers
                     struct APIPost: Decodable {
                         let id: String?
-                        let sequentialCode: String?
+        let sequentialCode: String?
                         let code: String?
-                        let content: String?
+        let content: String?
                         let author: String?
                         let address: String?
                         let userAddress: String?
-                        let parentSequentialCode: String?
+        let parentSequentialCode: String?
                         let parentCode: String?
                         let createdAt: String?
                         let timestamp: IntOrString?
@@ -631,7 +631,7 @@ class LASKOService: ObservableObject {
                                 if let tsVal = api.timestamp?.asInt() {
                                     if tsVal > 1_000_000_000_000 {
                                         return Date(timeIntervalSince1970: TimeInterval(tsVal) / 1000.0)
-                                    } else {
+            } else {
                                         return Date(timeIntervalSince1970: TimeInterval(tsVal))
                                     }
                                 }
