@@ -112,21 +112,25 @@ class LASKOService: ObservableObject {
             Task { @MainActor in
                 let ok = true
                 if ok {
-                self.isAuthenticatedWithZeroa = true
+                    self.isAuthenticatedWithZeroa = true
                     self.currentTLSAddress = resp.tlsAddress
                     
-                    // Generate username for new users if not already set
+                    // Only generate username for new users if not already set
                     if UserDefaults.standard.string(forKey: "lasko_username") == nil {
                         self.username = self.generateAddressBasedUsername()
+                        print("🔍 LASKO: Generated new username: \(self.username)")
+                    } else {
+                        // Preserve existing username
+                        print("🔍 LASKO: Preserving existing username: \(self.username)")
                     }
                     
                     // Clear consumed response; request may already be cleared by Zeroa
                     AppGroupsService.shared.clearAuthResponse()
                     self.stopAuthPollingWindow()
                     print("✅ LASKO: Signature verified; identity established for \(resp.tlsAddress)")
-        } else {
-                self.isAuthenticatedWithZeroa = false
-                self.currentTLSAddress = nil
+                } else {
+                    self.isAuthenticatedWithZeroa = false
+                    self.currentTLSAddress = nil
                     print("❌ LASKO: Signature verification failed")
                 }
             }
