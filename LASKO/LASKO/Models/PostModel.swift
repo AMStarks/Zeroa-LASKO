@@ -6,7 +6,7 @@ struct Post: Identifiable, Codable {
     let author: String
     let timestamp: Date
     let likes: Int
-    let replies: Int
+    var replies: Int
     let isLiked: Bool
     let userRank: String // Bronze, Silver, Gold, Platinum, Diamond
     let avatarURL: String?

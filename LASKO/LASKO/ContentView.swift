@@ -10,8 +10,8 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Dark blue background
-                Color(red: 0.05, green: 0.08, blue: 0.15)
+                // Charcoal background
+                Color(red: 0.15, green: 0.15, blue: 0.15)
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -282,6 +282,7 @@ struct ModernFeedView: View {
     @EnvironmentObject var laskoService: LASKOService
     @State private var showingPostComposer = false
     @State private var selectedPost: Post?
+    @State private var promotedCommentInComments: Post? = nil
     @State private var showFluxDriveSheet = false
     @State private var showSubscriptionSheet = false
     @State private var showSettingsSheet = false
@@ -290,8 +291,8 @@ struct ModernFeedView: View {
     
     var body: some View {
         ZStack {
-            // Dark blue background
-            Color(red: 0.05, green: 0.08, blue: 0.15)
+            // Charcoal background
+            Color(red: 0.15, green: 0.15, blue: 0.15)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -339,7 +340,7 @@ struct ModernFeedView: View {
                     Spacer()
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 16) {
+                        LazyVStack(spacing: 0) {
                             ForEach(laskoService.posts) { post in
                                 ModernPostCard(post: post) {
                                     selectedPost = post
@@ -347,17 +348,22 @@ struct ModernFeedView: View {
                                 .background(
                                     NavigationLink(isActive: Binding(
                                         get: { selectedPost?.id == post.id },
-                                        set: { active in if !active { selectedPost = nil } }
+                                        set: { active in 
+                                            if !active { 
+                                                selectedPost = nil
+                                                promotedCommentInComments = nil
+                                            }
+                                        }
                                     )) {
                                         CommentsView(postId: post.id, sequentialCode: post.id)
                                             .navigationTitle("Comments")
                                             .navigationBarTitleDisplayMode(.inline)
+                                            .environmentObject(laskoService)
                                     } label: { EmptyView() }
                                     .hidden()
                                 )
                             }
                         }
-                        .padding(.horizontal, 20)
                         .padding(.bottom, 100) // Extra padding for floating button
                     }
                     .refreshable {
@@ -467,148 +473,159 @@ struct ModernPostCard: View {
     @State private var likesCount: Int = 0
     @State private var showReplies: Bool = false
     @State private var inlineReplyText: String = ""
+    @State private var selectedPostID: String? = nil
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 16) {
-                // Post header
-                HStack(spacing: 12) {
-                    // User avatar (URL-backed if present)
-                    if let urlStr = post.avatarURL, let url = URL(string: urlStr) {
-                        AsyncImage(url: url) { img in
-                            img.resizable().scaledToFill()
-                        } placeholder: {
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                        }
-                        .frame(width: 29, height: 29)
-                        .clipShape(Circle())
-                    } else {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color(red: 1.0, green: 0.6, blue: 0.0),
-                                            Color(red: 1.0, green: 0.4, blue: 0.0)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                VStack(alignment: .leading, spacing: 16) {
+                    // Post header
+                    HStack(spacing: 12) {
+                        // User avatar (URL-backed if present)
+                        if let urlStr = post.avatarURL, let url = URL(string: urlStr) {
+                            AsyncImage(url: url) { img in
+                                img.resizable().scaledToFill()
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.white.opacity(0.08))
+                            }
+                            .frame(width: 29, height: 29)
+                            .clipShape(Circle())
+                        } else {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 1.0, green: 0.6, blue: 0.0),
+                                                Color(red: 1.0, green: 0.4, blue: 0.0)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                                .frame(width: 29, height: 29)
-                            Text(String(post.author.prefix(1)))
-                                .font(.system(size: 12, weight: .bold))
+                                    .frame(width: 29, height: 29)
+                                Text(String(post.author.prefix(1)))
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        
+                        // Username and time inline to the right
+                        HStack(spacing: 8) {
+                            Text(laskoService.getDisplayName(for: post.author))
+                                .font(.system(size: 14, weight: .bold))
                                 .foregroundColor(.white)
+                                .onAppear {
+                                    print("🔍 UI: Displaying username for post \(post.id): \(laskoService.getDisplayName(for: post.author)) (author: \(post.author))")
+                                }
+                            Text(timeAgoString(from: post.timestamp))
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        
+                        Spacer()
+                        
+                        // Rank icon based on user rank
+                        if let rankImageName = getRankImageName(for: post.userRank) {
+                            Image(systemName: rankImageName)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.0)) // Orange theme color
+                                .shadow(color: Color(red: 1.0, green: 0.6, blue: 0.0).opacity(0.6), radius: 8, x: 0, y: 0)
                         }
                     }
                     
-                    // Username and time inline to the right
-                    HStack(spacing: 8) {
-                        Text(post.author.isEmpty ? "User" : post.author)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                        Text(timeAgoString(from: post.timestamp))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
+                    // Post content
+                    Text(post.content)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
                     
-                    Spacer()
-                    
-                    // Rank icon based on user rank
-                    if let rankImageName = getRankImageName(for: post.userRank) {
-                        Image(systemName: rankImageName)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(Color(red: 1.0, green: 0.6, blue: 0.0)) // Orange theme color
-                            .shadow(color: Color(red: 1.0, green: 0.6, blue: 0.0).opacity(0.6), radius: 8, x: 0, y: 0)
-                    }
-                }
-                
-                // Post content
-                Text(post.content)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                // LAS sequential code (for verification)
-                Text("LAS: \(post.id)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.6))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Post actions (evenly spaced across the card)
-                HStack(spacing: 0) {
-                    // Message (comment) first
-                    Button(action: {
-                        isCommented.toggle()
-                        withAnimation { showReplies.toggle() }
-                        // Prefetch comments regardless of displayed count
-                        Task { await laskoService.fetchComments(forSequentialCode: post.id) }
-                        if showReplies {
-                            // already fetched above; toggle visibility
+                    // Post actions (evenly spaced across the card) - WITHOUT THREE DOTS
+                    HStack(spacing: 0) {
+                        // Message (comment) first
+                        Button(action: {
+                            isCommented.toggle()
+                            withAnimation { showReplies.toggle() }
+                            // Prefetch comments regardless of displayed count
+                            Task { await laskoService.fetchComments(forSequentialCode: post.id) }
+                            if showReplies {
+                                // already fetched above; toggle visibility
+                            }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "message")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.6))
+                                Text("\(post.replies)")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.9))
+                            }
                         }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "message")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.6))
-                            Text("\(post.replies)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(isCommented ? Color(red: 0.35, green: 0.75, blue: 1.0) : .white.opacity(0.9))
+                        .buttonStyle(PlainButtonStyle())
+
+                        Spacer()
+
+                        // Broadcast (share)
+                        Button(action: { isAnnounced.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "megaphone")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
+                                Text("0")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(isAnnounced ? .green : .white.opacity(0.9))
+                            }
                         }
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(PlainButtonStyle())
 
-                    Spacer()
+                        Spacer()
 
-                    // Broadcast (share)
-                    Button(action: { isAnnounced.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "megaphone")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.6))
-                            Text("0")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(isAnnounced ? .green : .white.opacity(0.9))
+                        // Fire (like)
+                        Button(action: {
+                            isLiked.toggle()
+                            likesCount += isLiked ? 1 : -1
+                            Task { await LASKOService().likePost(post) }
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: isLiked ? "flame.fill" : "flame")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(isLiked ? .red : .white.opacity(0.6))
+                                Text("\(likesCount)")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(isLiked ? .red : .white.opacity(0.9))
+                            }
                         }
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                        .buttonStyle(PlainButtonStyle())
 
-                    Spacer()
+                        Spacer()
+                        
+                        // Telestai reward button with transient +10 TLS
+                        TelestaiRewardActionButton()
+                        
+                        Spacer()
 
-                    // Fire (like)
-                    Button(action: {
-                        isLiked.toggle()
-                        likesCount += isLiked ? 1 : -1
-                        Task { await LASKOService().likePost(post) }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isLiked ? "flame.fill" : "flame")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(isLiked ? .red : .white.opacity(0.6))
-                            Text("\(likesCount)")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(isLiked ? .red : .white.opacity(0.9))
+                        // Three dots button
+                        Button(action: {
+                            UIPasteboard.general.string = post.id
+                            // Add haptic feedback
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                            // Change color to orange for this post
+                            selectedPostID = post.id
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(selectedPostID == post.id ? .orange : .white.opacity(0.6))
+                                Text("")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.clear)
+                            }
                         }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
-
-                    Spacer()
-                    
-                    // Telestai reward button with transient +10 TLS
-                    TelestaiRewardActionButton()
-                    
-                    Spacer()
-
-                    // Function button
-                    Button(action: {}) {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
                 
                 // Inline replies section
                 if showReplies {
@@ -617,7 +634,7 @@ struct ModernPostCard: View {
                             ForEach(replies) { r in
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {
-                                        Text(r.author)
+                                        Text(laskoService.getDisplayName(for: r.author))
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundColor(.white)
                                         Spacer()
@@ -659,14 +676,11 @@ struct ModernPostCard: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                Rectangle()
                     .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
             )
             .onAppear {
                 // Initialize local state from the incoming post
@@ -675,6 +689,16 @@ struct ModernPostCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        .background(
+            Rectangle()
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            Rectangle()
+                .frame(height: 1)
+                .foregroundColor(Color.orange.opacity(0.6)),
+            alignment: .bottom
+        )
     }
     
     private func timeAgoString(from date: Date) -> String {
@@ -749,7 +773,7 @@ struct ModernProfileView: View {
     @State private var showingBioEditor = false
     @State private var profileImage: UIImage?
     @State private var bannerImage: UIImage?
-    @State private var username = "LASKO User"
+    // Username is now managed by LASKOService
     @State private var bio = "Building the future of decentralized social media on LASKO"
     @State private var tlsAddress = ""
     @State private var scrollOffset: CGFloat = 0
@@ -765,7 +789,7 @@ struct ModernProfileView: View {
     
     var body: some View {
         ZStack {
-            Color(red: 0.05, green: 0.08, blue: 0.15)
+            Color(red: 0.15, green: 0.15, blue: 0.15)
                 .ignoresSafeArea()
             
             ScrollView {
@@ -840,7 +864,7 @@ struct ModernProfileView: View {
                             // Name and TLS address - VERTICAL layout
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 8) {
-                                    Text(username)
+                                    Text(laskoService.username)
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundColor(.white)
                                     
@@ -942,12 +966,11 @@ struct ModernProfileView: View {
                                 .padding(.horizontal, 20)
                             
                             // User's posts only
-                            LazyVStack(spacing: 12) {
+                            LazyVStack(spacing: 0) {
                                 ForEach(userPosts, id: \.id) { post in
                                     ModernPostCard(post: post) {}
                                 }
                             }
-                            .padding(.horizontal, 20)
                         }
                     }
                 }
@@ -975,7 +998,7 @@ struct ModernProfileView: View {
             ImagePicker(selectedImage: $bannerImage)
         }
         .sheet(isPresented: $showingNameEditor) {
-            NameEditorView(username: $username)
+            NameEditorView(username: $laskoService.username)
         }
         .sheet(isPresented: $showingBioEditor) {
             BioEditorView(bio: $bio)
@@ -1024,7 +1047,7 @@ struct NameEditorView: View {
                 Spacer()
             }
             .padding()
-            .background(Color(red: 0.05, green: 0.08, blue: 0.15))
+            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1076,7 +1099,7 @@ struct BioEditorView: View {
                 Spacer()
             }
             .padding()
-            .background(Color(red: 0.05, green: 0.08, blue: 0.15))
+            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1257,7 +1280,7 @@ struct LASKOSideMenuView: View {
                 Spacer()
             }
             .frame(width: 280)
-            .background(Color(red: 0.08, green: 0.11, blue: 0.18))
+            .background(Color(red: 0.15, green: 0.15, blue: 0.15))
             .overlay(
                 RoundedRectangle(cornerRadius: 0)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
@@ -1307,6 +1330,8 @@ struct LASKOSideMenuView: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
+
+
 
 #Preview {
     ContentView()

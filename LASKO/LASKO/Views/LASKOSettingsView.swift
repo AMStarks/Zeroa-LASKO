@@ -9,7 +9,7 @@ struct LASKOSettingsView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color(red: 0.05, green: 0.08, blue: 0.15)
+                Color(red: 0.15, green: 0.15, blue: 0.15)
                     .ignoresSafeArea()
 
                 VStack(spacing: 20) {

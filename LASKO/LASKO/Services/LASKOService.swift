@@ -31,6 +31,33 @@ class LASKOService: ObservableObject {
     @Published var isAuthenticatedWithZeroa = false
     @Published var currentTLSAddress: String?
     @Published var repliesByCode: [String: [Post]] = [:]
+    @Published var username: String = UserDefaults.standard.string(forKey: "lasko_username") ?? generateRandomUsername() {
+        didSet {
+            UserDefaults.standard.set(username, forKey: "lasko_username")
+        }
+    }
+    
+    private static func generateRandomUsername() -> String {
+        // Generate a random username for new users
+        let adjectives = ["Swift", "Bright", "Quick", "Smart", "Bold", "Sharp", "Fast", "Cool", "Fresh", "New"]
+        let nouns = ["User", "Member", "Player", "Explorer", "Pioneer", "Trader", "Builder", "Creator", "Voyager", "Navigator"]
+        
+        let randomAdjective = adjectives.randomElement() ?? "Swift"
+        let randomNoun = nouns.randomElement() ?? "User"
+        let randomNumber = Int.random(in: 100...999)
+        
+        return "\(randomAdjective)\(randomNoun)\(randomNumber)"
+    }
+    
+    private func generateAddressBasedUsername() -> String {
+        // Generate a username based on the TLS address
+        if let address = currentTLSAddress, !address.isEmpty {
+            // Take the first 6 characters of the address and capitalize them
+            let prefix = String(address.prefix(6)).uppercased()
+            return "User\(prefix)"
+        }
+        return LASKOService.generateRandomUsername()
+    }
     
     private let baseURL = "https://halo.telestai.io/api"
     private var effectiveBaseURL: String {
@@ -65,15 +92,21 @@ class LASKOService: ObservableObject {
             Task { @MainActor in
                 let ok = true
                 if ok {
-                    self.isAuthenticatedWithZeroa = true
+                self.isAuthenticatedWithZeroa = true
                     self.currentTLSAddress = resp.tlsAddress
+                    
+                    // Generate username for new users if not already set
+                    if UserDefaults.standard.string(forKey: "lasko_username") == nil {
+                        self.username = self.generateAddressBasedUsername()
+                    }
+                    
                     // Clear consumed response; request may already be cleared by Zeroa
                     AppGroupsService.shared.clearAuthResponse()
                     self.stopAuthPollingWindow()
                     print("✅ LASKO: Signature verified; identity established for \(resp.tlsAddress)")
-                } else {
-                    self.isAuthenticatedWithZeroa = false
-                    self.currentTLSAddress = nil
+        } else {
+                self.isAuthenticatedWithZeroa = false
+                self.currentTLSAddress = nil
                     print("❌ LASKO: Signature verification failed")
                 }
             }
@@ -149,13 +182,13 @@ class LASKOService: ObservableObject {
         // For interactive foreground handoff, also drop a lightweight auth request if not present
         if appGroupsService.sharedDefaults?.object(forKey: "lasko_auth_request_nonce") == nil {
             let req = LASKOAuthRequest(
-                appName: "LASKO",
+            appName: "LASKO",
                 appId: Bundle.main.bundleIdentifier ?? "com.telestai.LASKO",
-                permissions: ["post", "read"],
-                callbackURL: "lasko://auth/callback",
+            permissions: ["post", "read"],
+            callbackURL: "lasko://auth/callback",
                 username: nil,
-                nonce: nil
-            )
+            nonce: nil
+        )
             AppGroupsService.shared.storeLASKOAuthRequest(req)
             startAuthPollingWindow()
         }
@@ -206,10 +239,14 @@ class LASKOService: ObservableObject {
             print("⚠️ LASKO: Token subject (\(sub ?? "nil")) != TLS (\(tlsAddress)); will request refresh")
         }
         
-        // TEMPORARY: For testing, try to use any available token
+        // Check if we have any token, but only use it if it's fresh
         if let t = readHaloToken() {
-            print("⚠️ LASKO: TEMPORARY: Using existing token for testing: \(String(t.prefix(20)))...")
-            return t
+            if tokenIsFresh(t) {
+                print("✅ LASKO: Using existing fresh token")
+                return t
+            } else {
+                print("⚠️ LASKO: Existing token is expired, requesting refresh")
+            }
         }
         
         // Ask Zeroa to refresh and require a newer refresh marker
@@ -337,6 +374,7 @@ class LASKOService: ObservableObject {
         let content: String?
             let author: String?
             let address: String?
+            let userAddress: String?
         let createdAt: String?
             let timestamp: IntOrString?
             let timestampMs: IntOrString?
@@ -433,7 +471,7 @@ class LASKOService: ObservableObject {
                 return Post(
                     id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
                     content: api.content ?? "",
-                    author: api.author ?? api.address ?? "",
+                    author: getDisplayName(for: api.userAddress ?? api.author ?? api.address ?? "Unknown"),
                     timestamp: parsedTimestamp,
                     likes: api.likesCount?.asInt() ?? api.likes ?? 0,
                     replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
@@ -457,7 +495,7 @@ class LASKOService: ObservableObject {
                             Post(
                                 id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
                                 content: api.content ?? "",
-                                author: api.author ?? api.address ?? "",
+                                author: api.userAddress ?? api.author ?? api.address ?? "",
                                 timestamp: parseDate(isoString: api.createdAt, ts: api.timestamp, tsMs: api.timestampMs),
                                 likes: api.likesCount?.asInt() ?? api.likes ?? 0,
                                 replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
@@ -500,91 +538,143 @@ class LASKOService: ObservableObject {
             print("❌ LASKO: fetchComments failed - no token")
             return 
         }
-        let allowed = CharacterSet.urlPathAllowed
-        guard let encoded = code.addingPercentEncoding(withAllowedCharacters: allowed) else { return }
-        guard let primaryURL = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/replies?limit=50") else { return }
-        do {
-            var req = URLRequest(url: primaryURL)
-            req.httpMethod = "GET"
-            req.setValue("application/json", forHTTPHeaderField: "Accept")
-            req.setValue(tls, forHTTPHeaderField: "X-TLS-Address")
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
-            var (data, resp) = try await URLSession.shared.data(for: req)
-            if let http = resp as? HTTPURLResponse, http.statusCode == 404 {
-                // Try alternate endpoint names
-                if let alt = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/comments?limit=50") {
-                    req.url = alt
-                    (data, resp) = try await URLSession.shared.data(for: req)
-                } else if let alt2 = URL(string: "\(effectiveBaseURL)/comments?parentSequentialCode=\(encoded)&limit=50") {
-                    req.url = alt2
-                    (data, resp) = try await URLSession.shared.data(for: req)
+        
+        // Fetch all comments for this post (including nested replies)
+        await fetchAllNestedComments(forPostCode: code, token: token)
+    }
+    
+    private func fetchAllNestedComments(forPostCode postCode: String, token: String) async {
+        print("🔍 LASKO: fetchAllNestedComments called for post: \(postCode)")
+        
+        var allComments: [Post] = []
+        var commentIdsToFetch: Set<String> = [postCode]
+        var fetchedCommentIds: Set<String> = []
+        
+        // Keep fetching until we have all nested comments
+        while !commentIdsToFetch.isEmpty {
+            let currentBatch = Array(commentIdsToFetch)
+            commentIdsToFetch.removeAll()
+            
+            for commentId in currentBatch {
+                if fetchedCommentIds.contains(commentId) { continue }
+                
+                let allowed = CharacterSet.urlPathAllowed
+                guard let encoded = commentId.addingPercentEncoding(withAllowedCharacters: allowed) else { continue }
+                
+                // Try multiple endpoints for compatibility
+                var url: URL?
+                if let primaryURL = URL(string: "\(effectiveBaseURL)/posts?parentSequentialCode=\(encoded)") {
+                    url = primaryURL
+                } else if let altURL = URL(string: "\(effectiveBaseURL)/posts/\(encoded)/replies?limit=50") {
+                    url = altURL
+                } else if let alt2URL = URL(string: "\(effectiveBaseURL)/comments?parentSequentialCode=\(encoded)&limit=50") {
+                    url = alt2URL
+                }
+                
+                guard let finalURL = url else { continue }
+                
+                var req = URLRequest(url: finalURL)
+                req.httpMethod = "GET"
+                req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                req.setValue("application/json", forHTTPHeaderField: "Accept")
+                if let bundleId = Bundle.main.bundleIdentifier { req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
+                
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: req)
+                    if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                        print("❌ LASKO: fetchAllNestedComments server error: \(http.statusCode) for comment: \(commentId)")
+                        continue
+                    }
+                    
+                    // Reuse decoding helpers
+                    struct APIPost: Decodable {
+                        let id: String?
+                        let sequentialCode: String?
+                        let code: String?
+                        let content: String?
+                        let author: String?
+                        let address: String?
+                        let userAddress: String?
+                        let parentSequentialCode: String?
+                        let parentCode: String?
+                        let createdAt: String?
+                        let timestamp: IntOrString?
+                        let timestampMs: IntOrString?
+                        let likes: Int?
+                        let likesCount: IntOrString?
+                        let replies: Int?
+                        let repliesCount: IntOrString?
+                        let userRank: String?
+                    }
+                    struct Envelope: Decodable { let data: [APIPost]? }
+                    
+                    let decoder = JSONDecoder()
+                    var items: [APIPost] = []
+                    if let arr = try? decoder.decode([APIPost].self, from: data) {
+                        items = arr
+                    } else if let env = try? decoder.decode(Envelope.self, from: data), let arr = env.data {
+                        items = arr
+                    } else if let any = try? JSONSerialization.jsonObject(with: data, options: []), let dict = any as? [String: Any], let arrAny = dict["data"] as? [[String: Any]] {
+                        let arrData = try JSONSerialization.data(withJSONObject: arrAny, options: [])
+                        items = (try? decoder.decode([APIPost].self, from: arrData)) ?? []
+                    }
+                    
+                    let newComments = items.map { api in
+                        Post(
+                            id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
+                            content: api.content ?? "",
+                            author: getDisplayName(for: api.userAddress ?? api.author ?? api.address ?? "Unknown"),
+                            timestamp: {
+                                if let msVal = api.timestampMs?.asInt() { 
+                                    return Date(timeIntervalSince1970: TimeInterval(msVal) / 1000.0) 
+                                }
+                                if let tsVal = api.timestamp?.asInt() {
+                                    if tsVal > 1_000_000_000_000 {
+                                        return Date(timeIntervalSince1970: TimeInterval(tsVal) / 1000.0)
+                                    } else {
+                                        return Date(timeIntervalSince1970: TimeInterval(tsVal))
+                                    }
+                                }
+                                if let s = api.createdAt { 
+                                    let f = ISO8601DateFormatter()
+                                    return f.date(from: s) ?? Date() 
+                                }
+                                return Date()
+                            }(),
+                            likes: api.likesCount?.asInt() ?? api.likes ?? 0,
+                            replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
+                            isLiked: false,
+                            userRank: api.userRank ?? "Bronze",
+                            parentCode: api.parentSequentialCode
+                        )
+                    }
+                    
+                    allComments.append(contentsOf: newComments)
+                    fetchedCommentIds.insert(commentId)
+                    
+                    // Add new comment IDs to fetch queue for nested replies
+                    for comment in newComments {
+                        if !fetchedCommentIds.contains(comment.id) && !commentIdsToFetch.contains(comment.id) {
+                            commentIdsToFetch.insert(comment.id)
+                        }
+                    }
+                    
+                    print("✅ LASKO: Fetched \(newComments.count) comments for \(commentId)")
+                    
+                } catch {
+                    print("❌ LASKO: fetchAllNestedComments error for \(commentId): \(error)")
                 }
             }
-            guard let http = resp as? HTTPURLResponse, http.statusCode < 400 else { return }
-
-            // Reuse decoding helpers
-            struct APIPost: Decodable {
-                let id: String?
-        let sequentialCode: String?
-                let code: String?
-        let content: String?
-                let author: String?
-                let address: String?
-        let createdAt: String?
-                let timestamp: IntOrString?
-                let timestampMs: IntOrString?
-                let likes: Int?
-                let likesCount: IntOrString?
-                let replies: Int?
-                let repliesCount: IntOrString?
-                let userRank: String?
+        }
+        
+        await MainActor.run {
+            self.repliesByCode[postCode] = allComments
+            print("✅ LASKO: Total fetched \(allComments.count) comments for post: \(postCode)")
+            
+            // Update the main post's reply count to reflect total nested comments
+            if let postIndex = self.posts.firstIndex(where: { $0.id == postCode }) {
+                self.posts[postIndex].replies = allComments.count
             }
-            struct Envelope: Decodable { let data: [APIPost]? }
-            let decoder = JSONDecoder()
-            var items: [APIPost] = []
-            if let arr = try? decoder.decode([APIPost].self, from: data) {
-                items = arr
-            } else if let env = try? decoder.decode(Envelope.self, from: data), let arr = env.data {
-                items = arr
-            } else if let any = try? JSONSerialization.jsonObject(with: data, options: []), let dict = any as? [String: Any], let arrAny = dict["data"] as? [[String: Any]] {
-                let arrData = try JSONSerialization.data(withJSONObject: arrAny, options: [])
-                items = (try? decoder.decode([APIPost].self, from: arrData)) ?? []
-            }
-            print("🔍 LASKO: fetchComments found \(items.count) replies for \(code)")
-            let mapped = items.map { api in
-                Post(
-                    id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
-                    content: api.content ?? "",
-                    author: api.author ?? api.address ?? "",
-                    timestamp: {
-                        // Use the same parsing logic as fetchPosts
-                        if let msVal = api.timestampMs?.asInt() { 
-                            return Date(timeIntervalSince1970: TimeInterval(msVal) / 1000.0) 
-                        }
-                        if let tsVal = api.timestamp?.asInt() {
-                            // Server's "timestamp" field is actually milliseconds since epoch
-                            if tsVal > 1_000_000_000_000 { // If > 1 trillion, it's milliseconds
-                                return Date(timeIntervalSince1970: TimeInterval(tsVal) / 1000.0)
-                            } else {
-                                return Date(timeIntervalSince1970: TimeInterval(tsVal)) // Treat as seconds
-                            }
-                        }
-                        if let s = api.createdAt { 
-                            let f = ISO8601DateFormatter()
-                            return f.date(from: s) ?? Date() 
-                        }
-                        return Date()
-                    }(),
-                    likes: api.likesCount?.asInt() ?? api.likes ?? 0,
-                    replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
-                    isLiked: false,
-                    userRank: api.userRank ?? "Bronze"
-                )
-            }
-            DispatchQueue.main.async { self.repliesByCode[code] = mapped }
-        } catch {
-            // ignore for now; UI will show placeholder
         }
     }
 
@@ -653,7 +743,12 @@ class LASKOService: ObservableObject {
                 print("❌ LASKO: createComment server error: \(http.statusCode) \(String(data: data, encoding: .utf8) ?? "")")
                 return false
             }
-            await fetchComments(forSequentialCode: code)
+            // After posting a comment, refresh the main post's comments to show the new comment
+            if let mainPostCode = getMainPostCode(forCommentCode: code) {
+                await fetchComments(forSequentialCode: mainPostCode)
+            } else {
+                await fetchComments(forSequentialCode: code)
+            }
             // Refresh main posts to update reply counts in UI
             await fetchPosts()
             return true
@@ -854,6 +949,46 @@ class LASKOService: ObservableObject {
         }
     }
     
+    // Helper function to find the main post code for a given comment
+    private func getMainPostCode(forCommentCode commentCode: String) -> String? {
+        // First, check if this comment is directly under a main post
+        if let replies = repliesByCode[commentCode] {
+            for reply in replies {
+                if reply.parentCode == commentCode {
+                    // This is a direct reply to the main post
+                    return commentCode
+                }
+            }
+        }
+        
+        // If not, traverse up the comment chain to find the main post
+        var currentCode = commentCode
+        var visited = Set<String>()
+        
+        while !visited.contains(currentCode) {
+            visited.insert(currentCode)
+            
+            // Look for this comment in all reply collections
+            for (postCode, replies) in repliesByCode {
+                if let comment = replies.first(where: { $0.id == currentCode }) {
+                    if let parentCode = comment.parentCode, !parentCode.isEmpty {
+                        // Check if parent is a main post (no parent or parent is the post itself)
+                        if parentCode == postCode || repliesByCode[parentCode] == nil {
+                            return postCode
+                        }
+                        currentCode = parentCode
+                        break
+                    } else {
+                        // This comment has no parent, so it's directly under the main post
+                        return postCode
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
     // MARK: - Blockchain Methods (Placeholder)
     
     func getBlockchainInfo() async -> TelestaiBlock? {
@@ -886,6 +1021,24 @@ class LASKOService: ObservableObject {
         // TODO: Replace with call to Indexer verify endpoint for message/signature
         // let ok = await Backend.verify(address: address, message: message, signature: signature)
         return true
+    }
+    
+    // MARK: - Username Management
+    
+    func getDisplayName(for address: String) -> String {
+        print("🔍 LASKO: getDisplayName called for address: \(address)")
+        print("🔍 LASKO: currentTLSAddress: \(currentTLSAddress ?? "nil")")
+        print("🔍 LASKO: username: \(username)")
+        
+        // If this is the current user's address, return their username
+        if address == currentTLSAddress {
+            print("✅ LASKO: Address matches current user, returning username: \(username)")
+            return username
+        }
+        // For other users, return a shortened version of their address
+        let displayName = address.isEmpty ? "User" : String(address.prefix(8)) + "..."
+        print("✅ LASKO: Address is different user, returning shortened: \(displayName)")
+        return displayName
     }
 }
 
