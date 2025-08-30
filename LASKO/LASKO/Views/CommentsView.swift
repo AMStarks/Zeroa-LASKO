@@ -116,8 +116,8 @@ struct CommentsView: View {
                                 }
                             }
                             .padding(16)
-                            // Lighter grey for top promoted card to reinforce hierarchy (match post view)
-                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.05))
+                            // Lighter grey for top promoted card to reinforce hierarchy (exactly match post view)
+                            .background(Color.white.opacity(0.05))
                         }
                     } else if let originalPost = laskoService.posts.first(where: { $0.id == postId }) {
                         OriginalPostCard(post: originalPost)
@@ -146,6 +146,7 @@ struct CommentsView: View {
                         if let promoted = promotedComment {
                             // Show replies to the promoted comment as top-level comments
                             // Ensure chronological ordering (oldest first like the post view)
+                            // Enforce chronological ordering strictly (oldest first)
                             let promotedReplies = (laskoService.repliesByCode[promoted.id] ?? []).sorted { $0.timestamp < $1.timestamp }
                             
                             if !promotedReplies.isEmpty {
