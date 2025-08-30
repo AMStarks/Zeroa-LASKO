@@ -570,11 +570,15 @@ class LASKOService: ObservableObject {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(currentTLSAddress ?? "", forHTTPHeaderField: "X-TLS-Address")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let bundleId = Bundle.main.bundleIdentifier { request.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id") }
 
         do {
+            print("🔍 LASKO: Making API request to: \(url)")
             let (data, response) = try await URLSession.shared.data(for: request)
+            print("🔍 LASKO: Received response for comments: \(String(data: data, encoding: .utf8) ?? "nil")")
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 let responseString = String(data: data, encoding: .utf8) ?? "No response data"
                 let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
