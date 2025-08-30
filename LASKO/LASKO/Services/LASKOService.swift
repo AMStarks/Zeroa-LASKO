@@ -563,7 +563,12 @@ class LASKOService: ObservableObject {
         print("🔍 LASKO: fetchAllNestedComments called for post: \(postCode)")
         
         // Comments are stored as posts with parentSequentialCode, so query the main posts endpoint
-        guard let url = URL(string: "\(effectiveBaseURL)/posts?parentSequentialCode=\(postCode)") else {
+        var components = URLComponents(string: "\(effectiveBaseURL)/posts")
+        components?.queryItems = [
+            URLQueryItem(name: "parentSequentialCode", value: postCode),
+            URLQueryItem(name: "limit", value: "200")
+        ]
+        guard let url = components?.url else {
             print("❌ LASKO: Invalid URL for fetching comments for post \(postCode).")
             return 0
         }
