@@ -116,8 +116,8 @@ struct CommentsView: View {
                                 }
                             }
                             .padding(16)
-                            // Lighter grey for top promoted card to reinforce hierarchy
-                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.08))
+                            // Lighter grey for top promoted card to reinforce hierarchy (match post view)
+                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.05))
                         }
                     } else if let originalPost = laskoService.posts.first(where: { $0.id == postId }) {
                         OriginalPostCard(post: originalPost)
@@ -145,7 +145,8 @@ struct CommentsView: View {
                     if let code = sequentialCode, let replies = laskoService.repliesByCode[code], !replies.isEmpty {
                         if let promoted = promotedComment {
                             // Show replies to the promoted comment as top-level comments
-                            let promotedReplies = laskoService.repliesByCode[promoted.id] ?? []
+                            // Ensure chronological ordering (oldest first like the post view)
+                            let promotedReplies = (laskoService.repliesByCode[promoted.id] ?? []).sorted { $0.timestamp < $1.timestamp }
                             
                             if !promotedReplies.isEmpty {
                                 // Add gap between top post and first comment
@@ -181,10 +182,11 @@ struct CommentsView: View {
                             }
                         } else {
                             // Show original post's top-level comments
+                            // Ensure chronological ordering for top-level replies
                             let topLevel = replies.filter { reply in
                                 let parentCode = reply.parentCode ?? ""
                                 return parentCode.isEmpty || parentCode == code
-                            }
+                            }.sorted { $0.timestamp < $1.timestamp }
                             
                             if !topLevel.isEmpty {
                                 // Add gap between top post and first comment
