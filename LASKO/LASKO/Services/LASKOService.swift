@@ -562,7 +562,9 @@ class LASKOService: ObservableObject {
     private func fetchAllNestedComments(forPostCode postCode: String, token: String) async -> Int {
         print("🔍 LASKO: fetchAllNestedComments called for post: \(postCode)")
         
-        guard let url = URL(string: "\(effectiveBaseURL)/posts/\(postCode)/comments") else {
+        let allowed = CharacterSet.urlPathAllowed
+        guard let encodedPostCode = postCode.addingPercentEncoding(withAllowedCharacters: allowed),
+              let url = URL(string: "\(effectiveBaseURL)/posts/\(encodedPostCode)/comments") else {
             print("❌ LASKO: Invalid URL for fetching comments for post \(postCode).")
             return 0
         }
