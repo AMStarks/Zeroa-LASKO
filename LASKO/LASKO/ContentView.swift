@@ -684,7 +684,7 @@ struct ModernPostCard: View {
             .padding(.vertical, 16)
             .background(
                 Rectangle()
-                    .fill(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
+                    .fill(Color.white.opacity(0.05))
             )
             .onAppear {
                 // Initialize local state from the incoming post
@@ -695,7 +695,7 @@ struct ModernPostCard: View {
         .buttonStyle(PlainButtonStyle())
         .background(
             Rectangle()
-                .fill(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
+                .fill(Color.white.opacity(0.05))
         )
         .overlay(
             Rectangle()
