@@ -49,8 +49,9 @@ struct CommentsView: View {
                                     .foregroundColor(LASKDesignSystem.Colors.text)
                                     .multilineTextAlignment(.leading)
                                 
-                                // Action buttons for promoted comment
+                                // Action buttons for promoted comment (ensure full set of icons)
                                 HStack(spacing: 12) {
+                                    // Reply
                                     Button(action: {
                                         replyingToComment = promoted
                                     }) {
@@ -63,9 +64,39 @@ struct CommentsView: View {
                                         .foregroundColor(LASKDesignSystem.Colors.textSecondary)
                                     }
                                     .buttonStyle(PlainButtonStyle())
-                                    
+
+                                    // Broadcast
+                                    Button(action: {}) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "megaphone")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
+                                            Text("0")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
+                                        }
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+
+                                    // Fire
+                                    Button(action: {}) {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "flame")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
+                                            Text("0")
+                                                .font(.system(size: 12, weight: .medium))
+                                                .foregroundColor(LASKDesignSystem.Colors.textSecondary)
+                                        }
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+
+                                    // TLS
+                                    TelestaiRewardActionButton()
+                                        .scaleEffect(0.8)
+
                                     Spacer()
-                                    
+
                                     // Three dots button
                                     Button(action: {
                                         UIPasteboard.general.string = promoted.id
@@ -85,7 +116,8 @@ struct CommentsView: View {
                                 }
                             }
                             .padding(16)
-                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.1))
+                            // Lighter grey for top promoted card to reinforce hierarchy
+                            .background(LASKDesignSystem.Colors.cardBackground.opacity(0.08))
                         }
                     } else if let originalPost = laskoService.posts.first(where: { $0.id == postId }) {
                         OriginalPostCard(post: originalPost)
