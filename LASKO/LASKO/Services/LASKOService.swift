@@ -485,8 +485,9 @@ class LASKOService: ObservableObject {
                     timestamp: parsedTimestamp,
                     likes: api.likesCount?.asInt() ?? api.likes ?? 0,
                     replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
-            isLiked: false,
-                    userRank: api.userRank ?? "Bronze"
+                    isLiked: false,
+                    userRank: api.userRank ?? "Bronze",
+                    tlsAddress: api.userAddress ?? api.address
                 )
             }
 
@@ -505,12 +506,13 @@ class LASKOService: ObservableObject {
                             Post(
                                 id: api.sequentialCode ?? api.code ?? api.id ?? UUID().uuidString,
                                 content: api.content ?? "",
-                                author: api.userAddress ?? api.author ?? api.address ?? "",
+                                author: getDisplayName(for: api.userAddress ?? api.author ?? api.address ?? "Unknown"),
                                 timestamp: parseDate(isoString: api.createdAt, ts: api.timestamp, tsMs: api.timestampMs),
                                 likes: api.likesCount?.asInt() ?? api.likes ?? 0,
                                 replies: api.repliesCount?.asInt() ?? api.replies ?? 0,
                                 isLiked: false,
-                                userRank: api.userRank ?? "Bronze"
+                                userRank: api.userRank ?? "Bronze",
+                                tlsAddress: api.userAddress ?? api.address
                             )
                         }
                         // Deduplicate by id
@@ -520,31 +522,9 @@ class LASKOService: ObservableObject {
                 }
             }
 
-            // Now optimize: only fetch comment counts for posts that actually have comments
-            let postsWithComments = mapped.filter { $0.replies > 0 }
-            print("🔍 LASKO: \(postsWithComments.count) out of \(mapped.count) posts have comments - only fetching counts for these")
-
-            if !postsWithComments.isEmpty {
-                // Fetch comment counts concurrently only for posts with comments
-                await withTaskGroup(of: (String, Int).self) { group in
-                    for post in postsWithComments {
-                        group.addTask {
-                            let postCode = post.id
-                            print("🔍 LASKO: Fetching comment count for post: \(postCode)")
-                            let totalComments = await self.fetchAllNestedComments(forPostCode: postCode, token: token)
-                            return (postCode, totalComments)
-                        }
-                    }
-
-                    // Collect results and update posts
-                    for await (postCode, totalComments) in group {
-                        if let postIndex = mapped.firstIndex(where: { $0.id == postCode }) {
-                            mapped[postIndex].replies = totalComments
-                            print("✅ LASKO: Updated post \(postCode) with total comment count: \(totalComments)")
-                        }
-                    }
-                }
-            }
+            // For now, use the replies count from the API response
+            // The comment counts should be accurate from the server
+            print("🔍 LASKO: Using reply counts from API response for \(mapped.count) posts")
             DispatchQueue.main.async {
                 self.posts = mapped
                 self.isLoading = false
@@ -576,7 +556,7 @@ class LASKOService: ObservableObject {
                 }
         
         // Fetch all comments for this post (including nested replies)
-        await fetchAllNestedComments(forPostCode: code, token: token)
+        let _ = await fetchAllNestedComments(forPostCode: code, token: token)
     }
     
     private func fetchAllNestedComments(forPostCode postCode: String, token: String) async -> Int {

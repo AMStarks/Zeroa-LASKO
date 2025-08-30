@@ -11,8 +11,9 @@ struct Post: Identifiable, Codable {
     let userRank: String // Bronze, Silver, Gold, Platinum, Diamond
     let avatarURL: String?
     let parentCode: String?
+    let tlsAddress: String? // Store the original TLS address for filtering
     
-    init(id: String = UUID().uuidString, content: String, author: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0, isLiked: Bool = false, userRank: String = "Bronze", avatarURL: String? = nil, parentCode: String? = nil) {
+    init(id: String = UUID().uuidString, content: String, author: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0, isLiked: Bool = false, userRank: String = "Bronze", avatarURL: String? = nil, parentCode: String? = nil, tlsAddress: String? = nil) {
         self.id = id
         self.content = content
         self.author = author
@@ -23,6 +24,7 @@ struct Post: Identifiable, Codable {
         self.userRank = userRank
         self.avatarURL = avatarURL
         self.parentCode = parentCode
+        self.tlsAddress = tlsAddress
     }
 }
 

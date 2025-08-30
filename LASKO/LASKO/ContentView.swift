@@ -787,7 +787,7 @@ struct ModernProfileView: View {
         let addr: String? = laskoService.currentTLSAddress ?? (tlsAddress.isEmpty ? nil : tlsAddress)
         return laskoService.posts.filter { p in
             guard let a = addr, !a.isEmpty else { return false }
-            return p.author == a
+            return p.tlsAddress == a
         }
     }
     
@@ -926,7 +926,7 @@ struct ModernProfileView: View {
                         // Compact stats (Twitter-style) - smaller and tucked
                         HStack(spacing: 20) {
                             HStack(spacing: 4) {
-                                Text("0")
+                                Text("\(userPosts.count)")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(LASKDesignSystem.Colors.text)
                                 Text("Posts")
