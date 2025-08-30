@@ -113,10 +113,7 @@ struct CommentsView: View {
                     if let code = sequentialCode, let replies = laskoService.repliesByCode[code], !replies.isEmpty {
                         if let promoted = promotedComment {
                             // Show replies to the promoted comment as top-level comments
-                            let promotedReplies = replies.filter { reply in
-                                let parentCode = reply.parentCode ?? ""
-                                return parentCode == promoted.id
-                            }
+                            let promotedReplies = laskoService.repliesByCode[promoted.id] ?? []
                             
                             if !promotedReplies.isEmpty {
                                 // Add gap between top post and first comment
@@ -127,7 +124,7 @@ struct CommentsView: View {
                                 ForEach(Array(promotedReplies.enumerated()), id: \.element.id) { index, reply in
                                     CommentRow(
                                         comment: reply,
-                                        all: replies,
+                                        all: promotedReplies,
                                         depth: 0, // Always top-level when promoted
                                         postId: postId,
                                         replyingToComment: $replyingToComment,
@@ -527,8 +524,8 @@ struct CommentRow: View {
                             .scaleEffect(0.8) // Make it smaller for comments
                         
                         // See more button for nested comments (only show if there are children and depth < 5)
-                        let children = all.filter { $0.parentCode == comment.id }
-                        if !children.isEmpty && depth < 5 {
+                        let childrenCount = (laskoService.repliesByCode[comment.id] ?? []).count
+                        if childrenCount > 0 && depth < 5 {
                             Button(action: {
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     // Add current promoted comment to history before promoting new one
@@ -546,7 +543,7 @@ struct CommentRow: View {
                                 HStack(spacing: 4) {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 10))
-                                    Text("see \(children.count) more")
+                                    Text("see \(childrenCount) more")
                                         .font(.system(size: 11, weight: .medium))
                                 }
                                 .foregroundColor(.orange)
