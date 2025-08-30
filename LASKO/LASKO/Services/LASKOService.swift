@@ -522,16 +522,38 @@ class LASKOService: ObservableObject {
                 }
             }
 
-            // For now, use the replies count from the API response
-            // The comment counts should be accurate from the server
-            print("🔍 LASKO: Using reply counts from API response for \(mapped.count) posts")
+            // Stage 1: show posts immediately with server-provided counts
+            print("🔍 LASKO: Using initial reply counts from API for \(mapped.count) posts, then reconciling totals including nested replies")
             DispatchQueue.main.async {
                 self.posts = mapped
                 self.isLoading = false
             }
-            print("✅ LASKO: Loaded \(mapped.count) posts")
+            print("✅ LASKO: Loaded \(mapped.count) posts (initial)")
             for (i, post) in mapped.enumerated() {
                 print("🔍 LASKO: Post \(i): id=\(post.id), timestamp=\(post.timestamp), content=\(String(post.content.prefix(30)))")
+            }
+
+            // Stage 2: reconcile comment counts by counting nested replies concurrently
+            Task {
+                await withTaskGroup(of: (String, Int).self) { group in
+                    let candidates = mapped.filter { $0.replies > 0 }
+                    for p in candidates {
+                        group.addTask { [weak self] in
+                            guard let self = self else { return (p.id, p.replies) }
+                            let total = await self.fetchAllNestedComments(forPostCode: p.id, token: token)
+                            return (p.id, total)
+                        }
+                    }
+                    for await (postId, total) in group {
+                        await MainActor.run {
+                            if let idx = self.posts.firstIndex(where: { $0.id == postId }) {
+                                self.posts[idx].replies = total
+                                // Log for visibility (e.g., LAS#...027 should jump from 3 -> 11)
+                                print("✅ LASKO: Updated nested reply count for \(postId): \(total)")
+                            }
+                        }
+                    }
+                }
             }
         } catch {
             print("❌ LASKO: fetchPosts error: \(error)")
