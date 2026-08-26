@@ -442,6 +442,7 @@ struct SwitchboardConversationDetailView: View {
     @State private var messages: [P2PMessage] = []
     @State private var typingTimer: Timer?
     @FocusState private var isTextFieldFocused: Bool
+    @StateObject private var mediaAttachmentController = SwitchboardMediaAttachmentController()
     
     private let p2pService = TLSLayer2MessagingService.shared
     
@@ -546,13 +547,38 @@ struct SwitchboardConversationDetailView: View {
                     messageText: $messageText,
                     isTyping: $isTyping,
                     showMediaOptions: $showMediaOptions,
-                    onSend: sendMessage
+                    onSend: sendMessage,
+                    onPhoto: { mediaAttachmentController.openPhoto() },
+                    onCamera: { mediaAttachmentController.openCamera() },
+                    onDocument: { mediaAttachmentController.openDocument() },
+                    onLocation: {
+                        mediaAttachmentController.openLocation { draft in
+                            appendAttachmentDraft(draft)
+                        }
+                    },
+                    onAudio: { mediaAttachmentController.openAudio() }
                 )
             }
             .navigationBarHidden(true)
         }
+        .switchboardMediaAttachments(
+            controller: mediaAttachmentController,
+            messageText: $messageText,
+            showMediaOptions: $showMediaOptions
+        )
         .onAppear {
             loadMessages()
+        }
+    }
+    
+    private func appendAttachmentDraft(_ draft: String) {
+        if messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messageText = draft
+        } else {
+            messageText += "\n\(draft)"
+        }
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showMediaOptions = false
         }
     }
     
@@ -656,6 +682,11 @@ struct SwitchboardEnhancedMessageInputView: View {
     @Binding var isTyping: Bool
     @Binding var showMediaOptions: Bool
     let onSend: () -> Void
+    let onPhoto: () -> Void
+    let onCamera: () -> Void
+    let onDocument: () -> Void
+    let onLocation: () -> Void
+    let onAudio: () -> Void
     
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isTextFieldFocused: Bool
@@ -664,7 +695,13 @@ struct SwitchboardEnhancedMessageInputView: View {
         VStack(spacing: 0) {
             // Media options (when expanded)
             if showMediaOptions {
-                SwitchboardMediaOptionsView()
+                SwitchboardMediaOptionsView(
+                    onPhoto: onPhoto,
+                    onCamera: onCamera,
+                    onDocument: onDocument,
+                    onLocation: onLocation,
+                    onAudio: onAudio
+                )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
@@ -717,46 +754,42 @@ struct SwitchboardEnhancedMessageInputView: View {
 
 // MARK: - Switchboard Media Options View
 struct SwitchboardMediaOptionsView: View {
+    let onPhoto: () -> Void
+    let onCamera: () -> Void
+    let onDocument: () -> Void
+    let onLocation: () -> Void
+    let onAudio: () -> Void
+
     var body: some View {
         HStack(spacing: DesignSystem.Spacing.lg) {
             SwitchboardMediaOptionButton(
                 icon: "photo",
                 title: "Photo",
-                action: {
-                    // TODO: Implement photo picker
-                }
+                action: onPhoto
             )
             
             SwitchboardMediaOptionButton(
                 icon: "camera",
                 title: "Camera",
-                action: {
-                    // TODO: Implement camera
-                }
+                action: onCamera
             )
             
             SwitchboardMediaOptionButton(
                 icon: "doc",
                 title: "Document",
-                action: {
-                    // TODO: Implement document picker
-                }
+                action: onDocument
             )
             
             SwitchboardMediaOptionButton(
                 icon: "location",
                 title: "Location",
-                action: {
-                    // TODO: Implement location sharing
-                }
+                action: onLocation
             )
             
             SwitchboardMediaOptionButton(
                 icon: "headphones",
                 title: "Audio",
-                action: {
-                    // TODO: Implement audio recording
-                }
+                action: onAudio
             )
         }
         .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -786,6 +819,7 @@ struct SwitchboardMediaOptionButton: View {
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
         }
+        .buttonStyle(.plain)
     }
 }
 
