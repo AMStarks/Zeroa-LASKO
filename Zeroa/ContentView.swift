@@ -194,7 +194,11 @@ struct ContentView: View {
                 }
             }
             .onAppear {
-                checkAutoLogin()
+                if ProcessInfo.processInfo.arguments.contains("-UI_TEST_SCREENSHOTS") {
+                    seedScreenshotWalletIfNeeded()
+                } else {
+                    checkAutoLogin()
+                }
             }
         }
         .sheet(isPresented: $showSubscriptionAlert) {
@@ -281,6 +285,22 @@ struct ContentView: View {
             }
         } else {
             isCheckingLogin = false
+        }
+    }
+
+    private func seedScreenshotWalletIfNeeded() {
+        guard walletService.loadAddress() == nil else {
+            if path.isEmpty {
+                path.append("home")
+            }
+            return
+        }
+
+        let mnemonic = "apple banana cherry date elder fig grape honey ice juice kiwi lemon"
+        walletService.importMnemonic(mnemonic) { success, _ in
+            if success {
+                path.append("home")
+            }
         }
     }
     
@@ -3179,6 +3199,7 @@ struct BottomNavigationView: View {
                     .foregroundColor(selectedTab == 1 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                     .frame(maxWidth: .infinity)
             }
+            .accessibilityIdentifier("bottomNav.messaging")
             
             // AI Companion Tab - Coming Soon
             Button(action: {
@@ -5067,6 +5088,7 @@ struct MenuView: View {
                             color: .purple
                         )
                     }
+                    .accessibilityIdentifier("menu.hybridMessaging")
                     
                     // Settings
                     NavigationLink(destination: SettingsView(path: $path)) {

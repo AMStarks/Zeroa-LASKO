@@ -102,6 +102,7 @@ struct HybridMessagingView: View {
                     ContactsTabView(
                         contacts: p2pService.contacts,
                         selectedContact: $selectedContact,
+                        showConversationDetail: $showConversationDetail,
                         showAddContact: $showAddContact,
                         newContactAddress: $newContactAddress,
                         newContactName: $newContactName,
@@ -128,6 +129,18 @@ struct HybridMessagingView: View {
                 name: $newContactName,
                 onAdd: addContact
             )
+        }
+        .sheet(isPresented: $showConversationDetail) {
+            if let contact = selectedContact {
+                SwitchboardConversationDetailView(
+                    contact: contact,
+                    conversation: selectedConversation,
+                    messageText: $messageText,
+                    isTyping: $conversationDetailIsTyping,
+                    showMediaOptions: $conversationDetailShowMediaOptions,
+                    selectedContact: $selectedContact
+                )
+            }
         }
         .sheet(isPresented: $showP2PConnectionStatus) {
             // P2PConnectionStatusView(webRTCManager: webRTCManager)  // Temporarily disabled
@@ -413,18 +426,6 @@ struct ConversationsTabView: View {
         }
         .sheet(isPresented: $showNewMessage) {
             NewMessageView()
-        }
-        .sheet(isPresented: $showConversationDetail) {
-            if let contact = selectedContact {
-                SwitchboardConversationDetailView(
-                    contact: contact,
-                    conversation: selectedConversation,
-                    messageText: $messageText,
-                    isTyping: $conversationDetailIsTyping,
-                    showMediaOptions: $conversationDetailShowMediaOptions,
-                    selectedContact: $selectedContact
-                )
-            }
         }
     }
 }
@@ -720,6 +721,7 @@ struct SwitchboardEnhancedMessageInputView: View {
                         .background(DesignSystem.Colors.surface)
                         .clipShape(Circle())
                 }
+                .accessibilityIdentifier("switchboard.mediaToggle")
                 
                 // Text input
                 HStack(spacing: DesignSystem.Spacing.xs) {
@@ -1135,6 +1137,7 @@ struct ConversationRowView: View {
 struct ContactsTabView: View {
     let contacts: [P2PContact]
     @Binding var selectedContact: P2PContact?
+    @Binding var showConversationDetail: Bool
     @Binding var showAddContact: Bool
     @Binding var newContactAddress: String
     @Binding var newContactName: String
@@ -1176,6 +1179,7 @@ struct ContactsTabView: View {
                                 ContactRowView(contact: contact)
                                     .onTapGesture {
                                         selectedContact = contact
+                                        showConversationDetail = true
                                     }
                             }
                         }
