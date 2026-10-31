@@ -194,7 +194,7 @@ struct ContentView: View {
                 }
             }
             .onAppear {
-                if ProcessInfo.processInfo.arguments.contains("-UI_TEST_SCREENSHOTS") {
+                if ZeroaDemoMode.isEnabled {
                     seedScreenshotWalletIfNeeded()
                 } else {
                     checkAutoLogin()
@@ -289,16 +289,23 @@ struct ContentView: View {
     }
 
     private func seedScreenshotWalletIfNeeded() {
-        guard walletService.loadAddress() == nil else {
+        ZeroaDemoMode.prepareForLaunch()
+
+        if walletService.loadAddress() != nil {
             if path.isEmpty {
                 path.append("home")
             }
             return
         }
 
-        let mnemonic = "apple banana cherry date elder fig grape honey ice juice kiwi lemon"
+        // Deterministic demo mnemonic for App Store screenshots / App Review demo mode.
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
         walletService.importMnemonic(mnemonic) { success, _ in
             if success {
+                AppGroupsService.shared.storeTLSAddress(walletService.loadAddress() ?? "TdemoZeroaScreenshotAddress111111")
+                path.append("home")
+            } else if path.isEmpty {
+                // Still enter home so screenshot automation is never stuck on login.
                 path.append("home")
             }
         }
@@ -2302,7 +2309,11 @@ struct HomeView: View {
             case .failure(let error):
                 print("AI request failed: \(error)")
                 DispatchQueue.main.async {
-                    self.alertMessage = "I'm sorry, I couldn't process that request. Please try again."
+                    if let consentError = error as? AIConsentError {
+                        self.alertMessage = consentError.localizedDescription
+                    } else {
+                        self.alertMessage = "I'm sorry, I couldn't process that request. Please try again."
+                    }
                     self.showAlert = true
                 }
             }
@@ -2490,6 +2501,15 @@ struct HomeView: View {
     }
     
     private func loadTLSData() async {
+        if ZeroaDemoMode.isEnabled {
+            tlsBalance = ZeroaDemoMode.demoTLSBalance
+            coinBalance = ZeroaDemoMode.demoTLSBalance
+            coinPrice = ZeroaDemoMode.demoTLSPriceUSD
+            isLoadingPrice = false
+            isLoadingHistory = false
+            return
+        }
+
         // Load balance from blockchain
         if let address = walletService.loadAddress(),
            let addressInfo = await tlsService.getAddressInfo(address: address) {
@@ -3174,7 +3194,6 @@ struct BottomNavigationView: View {
     @Binding var showHamburgerMenu: Bool
     @Binding var path: NavigationPath
     @ObservedObject var themeManager: ThemeManager = .shared
-    @State private var showComingSoonAlert = false
     
     var body: some View {
         HStack(spacing: 0) {
@@ -3201,22 +3220,23 @@ struct BottomNavigationView: View {
             }
             .accessibilityIdentifier("bottomNav.messaging")
             
-            // AI Companion Tab - Coming Soon
+            // AI Features (consent-gated xAI / Nova)
             Button(action: {
-                // Show coming soon alert
-                showComingSoonAlert = true
+                selectedTab = 2
+                path.append("ai")
             }) {
                 VStack(spacing: 4) {
                     Image(systemName: "atom")
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                     
-                    Text("Coming Soon")
+                    Text("AI")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                 }
                 .frame(maxWidth: .infinity)
             }
+            .accessibilityIdentifier("bottomNav.ai")
             
             // Menu Tab
             Button(action: {
@@ -3228,6 +3248,7 @@ struct BottomNavigationView: View {
                     .foregroundColor(selectedTab == 3 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                     .frame(maxWidth: .infinity)
             }
+            .accessibilityIdentifier("bottomNav.menu")
         }
         .padding(.vertical, DesignSystem.Spacing.md)
         .padding(.bottom, DesignSystem.Spacing.xs) // 2mm from bottom of screen
@@ -3239,11 +3260,6 @@ struct BottomNavigationView: View {
             alignment: .top
         )
         .ignoresSafeArea(.container, edges: .bottom)
-        .alert("Coming Soon", isPresented: $showComingSoonAlert) {
-            Button("OK") { }
-        } message: {
-            Text("Nova AI Companion is coming soon! We're working hard to bring you an amazing AI experience.")
-        }
     }
 }
 
@@ -3878,6 +3894,8 @@ struct StatsView: View {
 
 struct AIFeaturesView: View {
     @Binding var path: NavigationPath
+    @ObservedObject private var aiConsent = AIConsentManager.shared
+    @State private var showConsentSheet = false
     
     var body: some View {
         ZStack {
@@ -3885,8 +3903,18 @@ struct AIFeaturesView: View {
                 .ignoresSafeArea()
             
             VStack(spacing: DesignSystem.Spacing.lg) {
-                // Header
                 HStack {
+                    Button(action: {
+                        if !path.isEmpty { path.removeLast() }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(DesignSystem.Colors.text)
+                            .font(.system(size: 20))
+                            .padding(DesignSystem.Spacing.sm)
+                            .background(DesignSystem.Colors.surface)
+                            .clipShape(Circle())
+                    }
+                    
                     Spacer()
                     
                     Text("AI Features")
@@ -3894,29 +3922,65 @@ struct AIFeaturesView: View {
                         .foregroundColor(DesignSystem.Colors.text)
                     
                     Spacer()
+                    
+                    Circle()
+                        .fill(Color.clear)
+                        .frame(width: 44, height: 44)
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.top, DesignSystem.Spacing.lg)
                 
-                Spacer()
-                
-                VStack(spacing: DesignSystem.Spacing.lg) {
-                    Image(systemName: "brain.head.profile.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(DesignSystem.Colors.secondary)
-                    
-                    Text("Coming Soon")
-                        .font(DesignSystem.Typography.titleLarge)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Text("Advanced AI features and capabilities will be available in a future update.")
-                        .font(DesignSystem.Typography.bodyMedium)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                        .multilineTextAlignment(.center)
+                if aiConsent.needsConsentPrompt {
+                    AIConsentView(
+                        onAllow: { aiConsent.allow() },
+                        onNotNow: { aiConsent.decline() }
+                    )
+                } else if !aiConsent.canUseAI {
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        AIConsentRequiredBanner {
+                            showConsentSheet = true
+                        }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
+                        Spacer()
+                    }
+                } else {
+                    Spacer()
+                    
+                    VStack(spacing: DesignSystem.Spacing.lg) {
+                        Image(systemName: "brain.head.profile.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(DesignSystem.Colors.secondary)
+                        
+                        Text("Nova AI Companion")
+                            .font(DesignSystem.Typography.titleLarge)
+                            .foregroundColor(DesignSystem.Colors.text)
+                        
+                        Text("You’re sharing AI prompts with xAI to power assistant responses. Change this anytime in Settings. Deeper companion chat UI is still rolling out.")
+                            .font(DesignSystem.Typography.bodyMedium)
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                    }
+                    
+                    Spacer()
                 }
-                
-                Spacer()
+            }
+        }
+        .sheet(isPresented: $showConsentSheet) {
+            AIConsentView(
+                onAllow: {
+                    aiConsent.allow()
+                    showConsentSheet = false
+                },
+                onNotNow: {
+                    aiConsent.decline()
+                    showConsentSheet = false
+                }
+            )
+        }
+        .onAppear {
+            if aiConsent.needsConsentPrompt {
+                showConsentSheet = false
             }
         }
     }
@@ -4153,42 +4217,9 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: DesignSystem.Spacing.lg) {
-                        // AI Status
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("AI Status")
-                        .font(DesignSystem.Typography.headline)
-                        .foregroundColor(DesignSystem.Colors.text)
-                    
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    HStack {
-                                        Image(systemName: "brain.head.profile")
-                        .foregroundColor(DesignSystem.Colors.secondary)
-                                            .font(.system(size: 20))
-                                        
-                                        Text("xAI Grok Integration")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        
-                                        Spacer()
-                                        
-                                        Text("Active")
-                        .font(DesignSystem.Typography.bodySmall)
-                                            .foregroundColor(DesignSystem.Colors.success)
-                                            .padding(.horizontal, DesignSystem.Spacing.sm)
-                                            .padding(.vertical, 4)
-                                            .background(DesignSystem.Colors.success.opacity(0.2))
-                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
-                                    }
-                                    
-                                    Text("AI features are automatically configured")
-                                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        .multilineTextAlignment(.leading)
-                                }
-                            }
-                }
-                .padding(.horizontal, DesignSystem.Spacing.lg)
+                        // AI / xAI consent
+                        AISettingsConsentCard()
+                            .padding(.horizontal, DesignSystem.Spacing.lg)
                 
                         // Security & Session Management
                         CardView {

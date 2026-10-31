@@ -3,6 +3,7 @@ import PhotosUI
 import UniformTypeIdentifiers
 import CoreLocation
 import AVFoundation
+import UIKit
 
 enum SwitchboardAttachmentDraft {
     static func photo(_ name: String, kilobytes: Int) -> String {
@@ -28,40 +29,107 @@ enum SwitchboardAttachmentDraft {
 
 @MainActor
 final class SwitchboardMediaAttachmentController: ObservableObject {
-    @Published var showPhotoPicker = false
-    @Published var showCameraPicker = false
-    @Published var showDocumentPicker = false
-    @Published var showAudioRecorder = false
-    @Published var selectedPhotoItem: PhotosPickerItem?
+    @Published var alertTitle = "Attachment"
     @Published var alertMessage: String?
     @Published var showAlert = false
+    @Published var alertOffersSettings = false
+    @Published var showAudioRecorder = false
 
     private let locationProvider = SwitchboardLocationProvider()
+    private var photoDelegate: SwitchboardPhotoPickerDelegate?
+    private var cameraDelegate: SwitchboardCameraPickerDelegate?
+    private var documentDelegate: SwitchboardDocumentPickerDelegate?
+
+    var onDraft: ((String) -> Void)?
 
     func openPhoto() {
-        showPhotoPicker = true
+        var configuration = PHPickerConfiguration(photoLibrary: .shared())
+        configuration.filter = .images
+        configuration.selectionLimit = 1
+
+        let picker = PHPickerViewController(configuration: configuration)
+        let delegate = SwitchboardPhotoPickerDelegate { [weak self] draft in
+            self?.photoDelegate = nil
+            if let draft {
+                self?.emitDraft(draft)
+            }
+        }
+        photoDelegate = delegate
+        picker.delegate = delegate
+        present(picker, asPopoverFrom: nil)
     }
 
     func openCamera() {
+        // Simulators report camera availability inconsistently and cannot capture photos.
+        #if targetEnvironment(simulator)
+        openPhoto()
+        return
+        #else
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            presentAlert("Camera is not available on this device.")
+            presentAlert(
+                title: "Camera Unavailable",
+                message: "This device has no camera. Opening your photo library instead."
+            )
+            openPhoto()
             return
         }
-        showCameraPicker = true
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentCamera()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                Task { @MainActor in
+                    if granted {
+                        self?.presentCamera()
+                    } else {
+                        self?.presentPermissionDenied(
+                            title: "Camera Access Needed",
+                            message: "Enable Camera access in Settings to attach photos from the camera."
+                        )
+                    }
+                }
+            }
+        case .denied, .restricted:
+            presentPermissionDenied(
+                title: "Camera Access Needed",
+                message: "Enable Camera access in Settings to attach photos from the camera."
+            )
+        @unknown default:
+            presentAlert(title: "Camera Unavailable", message: "Camera access is unavailable on this device.")
+        }
+        #endif
     }
 
     func openDocument() {
-        showDocumentPicker = true
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item, .image, .pdf, .data], asCopy: true)
+        picker.allowsMultipleSelection = false
+        let delegate = SwitchboardDocumentPickerDelegate { [weak self] draft in
+            self?.documentDelegate = nil
+            if let draft {
+                self?.emitDraft(draft)
+            }
+        }
+        documentDelegate = delegate
+        picker.delegate = delegate
+        present(picker, asPopoverFrom: nil)
     }
 
-    func openLocation(onDraft: @escaping (String) -> Void) {
+    func openLocation() {
         locationProvider.fetchLocationDescription { [weak self] result in
             Task { @MainActor in
                 switch result {
                 case .success(let draft):
-                    onDraft(draft)
+                    self?.emitDraft(draft)
                 case .failure(let error):
-                    self?.presentAlert(error.localizedDescription)
+                    if let mediaError = error as? SwitchboardMediaAttachmentError, mediaError == .locationDenied {
+                        self?.presentPermissionDenied(
+                            title: "Location Access Needed",
+                            message: error.localizedDescription
+                        )
+                    } else {
+                        self?.presentAlert(title: "Location", message: error.localizedDescription)
+                    }
                 }
             }
         }
@@ -72,46 +140,199 @@ final class SwitchboardMediaAttachmentController: ObservableObject {
         case .granted:
             showAudioRecorder = true
         case .denied:
-            presentAlert("Microphone access is required to record audio. Enable it in Settings.")
+            presentPermissionDenied(
+                title: "Microphone Access Needed",
+                message: "Enable Microphone access in Settings to record audio attachments."
+            )
         case .undetermined:
             AVAudioSession.sharedInstance().requestRecordPermission { [weak self] granted in
                 Task { @MainActor in
                     if granted {
                         self?.showAudioRecorder = true
                     } else {
-                        self?.presentAlert("Microphone access is required to record audio.")
+                        self?.presentPermissionDenied(
+                            title: "Microphone Access Needed",
+                            message: "Enable Microphone access in Settings to record audio attachments."
+                        )
                     }
                 }
             }
         @unknown default:
-            presentAlert("Microphone access is unavailable.")
+            presentAlert(title: "Microphone Unavailable", message: "Microphone access is unavailable on this device.")
         }
     }
 
-    func consumeSelectedPhoto(onDraft: @escaping (String) -> Void) {
-        guard let item = selectedPhotoItem else { return }
-        let identifier = item.itemIdentifier ?? "selected-photo"
-        Task {
-            if let data = try? await item.loadTransferable(type: Data.self) {
-                let draft = SwitchboardAttachmentDraft.photo(identifier, kilobytes: max(1, data.count / 1024))
-                await MainActor.run {
-                    selectedPhotoItem = nil
-                    showPhotoPicker = false
-                    onDraft(draft)
-                }
-            } else {
-                await MainActor.run {
-                    selectedPhotoItem = nil
-                    showPhotoPicker = false
-                    presentAlert("Could not load the selected photo.")
-                }
+    func openSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private func presentCamera() {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.allowsEditing = false
+        let delegate = SwitchboardCameraPickerDelegate { [weak self] draft in
+            self?.cameraDelegate = nil
+            if let draft {
+                self?.emitDraft(draft)
             }
         }
+        cameraDelegate = delegate
+        picker.delegate = delegate
+        present(picker, asPopoverFrom: nil, fullScreen: true)
     }
 
-    private func presentAlert(_ message: String) {
+    private func emitDraft(_ draft: String) {
+        onDraft?(draft)
+    }
+
+    private func presentAlert(title: String, message: String) {
+        alertTitle = title
         alertMessage = message
+        alertOffersSettings = false
         showAlert = true
+    }
+
+    private func presentPermissionDenied(title: String, message: String) {
+        alertTitle = title
+        alertMessage = message
+        alertOffersSettings = true
+        showAlert = true
+    }
+
+    private func present(_ controller: UIViewController, asPopoverFrom source: UIView?, fullScreen: Bool = false) {
+        guard let presenter = SwitchboardPresenter.topViewController() else {
+            presentAlert(title: "Unable to Open", message: "Could not present the attachment picker. Please try again.")
+            return
+        }
+
+        if fullScreen {
+            controller.modalPresentationStyle = .fullScreen
+        } else if UIDevice.current.userInterfaceIdiom == .pad {
+            controller.modalPresentationStyle = .formSheet
+            if let popover = controller.popoverPresentationController {
+                let anchor = source ?? presenter.view
+                popover.sourceView = anchor
+                let bounds = source?.bounds ?? anchor?.bounds ?? .zero
+                popover.sourceRect = CGRect(
+                    x: bounds.midX - 1,
+                    y: bounds.midY - 1,
+                    width: 2,
+                    height: 2
+                )
+                popover.permittedArrowDirections = []
+            }
+        }
+
+        presenter.present(controller, animated: true)
+    }
+}
+
+enum SwitchboardPresenter {
+    @MainActor
+    static func topViewController(
+        base: UIViewController? = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .rootViewController
+    ) -> UIViewController? {
+        if let navigation = base as? UINavigationController {
+            return topViewController(base: navigation.visibleViewController)
+        }
+        if let tab = base as? UITabBarController {
+            return topViewController(base: tab.selectedViewController)
+        }
+        if let presented = base?.presentedViewController {
+            return topViewController(base: presented)
+        }
+        return base
+    }
+}
+
+private final class SwitchboardPhotoPickerDelegate: NSObject, PHPickerViewControllerDelegate {
+    private let completion: (String?) -> Void
+
+    init(completion: @escaping (String?) -> Void) {
+        self.completion = completion
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+
+        guard let result = results.first else {
+            completion(nil)
+            return
+        }
+
+        let provider = result.itemProvider
+        if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { object, _ in
+                let draft: String?
+                if let image = object as? UIImage {
+                    let bytes = image.jpegData(compressionQuality: 0.85)?.count ?? 0
+                    draft = SwitchboardAttachmentDraft.photo("selected-photo", kilobytes: max(1, bytes / 1024))
+                } else {
+                    draft = nil
+                }
+                DispatchQueue.main.async {
+                    self.completion(draft)
+                }
+            }
+        } else {
+            completion(nil)
+        }
+    }
+}
+
+private final class SwitchboardCameraPickerDelegate: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let completion: (String?) -> Void
+
+    init(completion: @escaping (String?) -> Void) {
+        self.completion = completion
+    }
+
+    func imagePickerController(
+        _ picker: UIImagePickerController,
+        didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+    ) {
+        let draft: String?
+        if let image = info[.originalImage] as? UIImage {
+            let bytes = image.jpegData(compressionQuality: 0.85)?.count ?? 0
+            draft = SwitchboardAttachmentDraft.camera(max(1, bytes / 1024))
+        } else {
+            draft = nil
+        }
+        picker.dismiss(animated: true) {
+            self.completion(draft)
+        }
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true) {
+            self.completion(nil)
+        }
+    }
+}
+
+private final class SwitchboardDocumentPickerDelegate: NSObject, UIDocumentPickerDelegate {
+    private let completion: (String?) -> Void
+
+    init(completion: @escaping (String?) -> Void) {
+        self.completion = completion
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        let draft = urls.first.map { SwitchboardAttachmentDraft.document($0.lastPathComponent) }
+        controller.dismiss(animated: true) {
+            self.completion(draft)
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        controller.dismiss(animated: true) {
+            self.completion(nil)
+        }
     }
 }
 
@@ -135,8 +356,10 @@ private final class SwitchboardLocationProvider: NSObject, CLLocationManagerDele
             manager.requestWhenInUseAuthorization()
         case .restricted, .denied:
             completion(.failure(SwitchboardMediaAttachmentError.locationDenied))
+            self.completion = nil
         @unknown default:
             completion(.failure(SwitchboardMediaAttachmentError.locationUnavailable))
+            self.completion = nil
         }
     }
 
@@ -159,11 +382,14 @@ private final class SwitchboardLocationProvider: NSObject, CLLocationManagerDele
             finish(.failure(SwitchboardMediaAttachmentError.locationUnavailable))
             return
         }
-        let draft = SwitchboardAttachmentDraft.location(
-            latitude: location.coordinate.latitude,
-            longitude: location.coordinate.longitude
+        finish(
+            .success(
+                SwitchboardAttachmentDraft.location(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+            )
         )
-        finish(.success(draft))
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
@@ -176,96 +402,16 @@ private final class SwitchboardLocationProvider: NSObject, CLLocationManagerDele
     }
 }
 
-enum SwitchboardMediaAttachmentError: LocalizedError {
+enum SwitchboardMediaAttachmentError: LocalizedError, Equatable {
     case locationDenied
     case locationUnavailable
 
     var errorDescription: String? {
         switch self {
         case .locationDenied:
-            return "Location access is required to share your position. Enable it in Settings."
+            return "Enable Location access in Settings to share your position in Switchboard messages."
         case .locationUnavailable:
             return "Could not determine your current location."
-        }
-    }
-}
-
-struct SwitchboardCameraPicker: UIViewControllerRepresentable {
-    let onImagePicked: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = .camera
-        picker.delegate = context.coordinator
-        picker.allowsEditing = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: SwitchboardCameraPicker
-
-        init(parent: SwitchboardCameraPicker) {
-            self.parent = parent
-        }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            if let image = info[.originalImage] as? UIImage {
-                parent.onImagePicked(image)
-            }
-            parent.dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.dismiss()
-        }
-    }
-}
-
-struct SwitchboardDocumentPicker: UIViewControllerRepresentable {
-    let onDocumentPicked: (URL) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let parent: SwitchboardDocumentPicker
-
-        init(parent: SwitchboardDocumentPicker) {
-            self.parent = parent
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else {
-                parent.dismiss()
-                return
-            }
-            parent.onDocumentPicked(url)
-            parent.dismiss()
-        }
-
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            parent.dismiss()
         }
     }
 }
@@ -274,6 +420,7 @@ struct SwitchboardAudioRecorderView: View {
     let onRecorded: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = SwitchboardAudioRecorder()
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -289,6 +436,14 @@ struct SwitchboardAudioRecorderView: View {
                 Text(recorder.elapsedLabel)
                     .font(DesignSystem.Typography.bodyMedium)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
 
                 Button(action: toggleRecording) {
                     Text(recorder.isRecording ? "Stop" : "Start Recording")
@@ -334,8 +489,10 @@ struct SwitchboardAudioRecorderView: View {
     private func toggleRecording() {
         if recorder.isRecording {
             recorder.stop()
+        } else if let error = recorder.start() {
+            errorMessage = error
         } else {
-            recorder.start()
+            errorMessage = nil
         }
     }
 }
@@ -354,7 +511,8 @@ final class SwitchboardAudioRecorder: ObservableObject {
     private var timer: Timer?
     private var outputURL: URL?
 
-    func start() {
+    @discardableResult
+    func start() -> String? {
         cancel()
         let session = AVAudioSession.sharedInstance()
         do {
@@ -370,7 +528,9 @@ final class SwitchboardAudioRecorder: ObservableObject {
                 AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
             ]
             let recorder = try AVAudioRecorder(url: url, settings: settings)
-            recorder.record()
+            guard recorder.prepareToRecord(), recorder.record() else {
+                return "Could not start audio recording."
+            }
             self.recorder = recorder
             outputURL = url
             isRecording = true
@@ -381,8 +541,10 @@ final class SwitchboardAudioRecorder: ObservableObject {
                     self?.elapsedSeconds += 1
                 }
             }
+            return nil
         } catch {
             isRecording = false
+            return error.localizedDescription
         }
     }
 
@@ -422,37 +584,26 @@ private struct SwitchboardMediaAttachmentModifiers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .photosPicker(
-                isPresented: $controller.showPhotoPicker,
-                selection: $controller.selectedPhotoItem,
-                matching: .images,
-                photoLibrary: .shared()
-            )
-            .onChange(of: controller.selectedPhotoItem) { _, _ in
-                controller.consumeSelectedPhoto { draft in
+            .onAppear {
+                controller.onDraft = { draft in
                     applyDraft(draft)
-                }
-            }
-            .fullScreenCover(isPresented: $controller.showCameraPicker) {
-                SwitchboardCameraPicker { image in
-                    let byteCount = image.jpegData(compressionQuality: 0.85)?.count ?? 0
-                    let kilobytes = max(1, byteCount / 1024)
-                    applyDraft(SwitchboardAttachmentDraft.camera(kilobytes))
-                }
-                .ignoresSafeArea()
-            }
-            .sheet(isPresented: $controller.showDocumentPicker) {
-                SwitchboardDocumentPicker { url in
-                    applyDraft(SwitchboardAttachmentDraft.document(url.lastPathComponent))
                 }
             }
             .sheet(isPresented: $controller.showAudioRecorder) {
                 SwitchboardAudioRecorderView { draft in
                     applyDraft(draft)
                 }
+                .presentationDetents([.medium, .large])
             }
-            .alert("Attachment", isPresented: $controller.showAlert) {
-                Button("OK", role: .cancel) {}
+            .alert(controller.alertTitle, isPresented: $controller.showAlert) {
+                if controller.alertOffersSettings {
+                    Button("Open Settings") {
+                        controller.openSettings()
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } else {
+                    Button("OK", role: .cancel) {}
+                }
             } message: {
                 Text(controller.alertMessage ?? "")
             }

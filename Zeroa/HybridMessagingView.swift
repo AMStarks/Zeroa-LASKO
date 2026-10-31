@@ -46,6 +46,7 @@ struct HybridMessagingView: View {
                     Text("Switchboard")
                         .font(DesignSystem.Typography.titleMedium)
                         .foregroundColor(DesignSystem.Colors.text)
+                        .accessibilityIdentifier("switchboard.title")
                     
                     Spacer()
                     
@@ -118,6 +119,11 @@ struct HybridMessagingView: View {
             }
         }
         .navigationBarHidden(true)
+        .onAppear {
+            if ZeroaDemoMode.isEnabled {
+                ZeroaDemoMode.prepareMessagingDemoData()
+            }
+        }
         .alert("Message", isPresented: $showAlert) {
             Button("OK") { }
         } message: {
@@ -552,11 +558,7 @@ struct SwitchboardConversationDetailView: View {
                     onPhoto: { mediaAttachmentController.openPhoto() },
                     onCamera: { mediaAttachmentController.openCamera() },
                     onDocument: { mediaAttachmentController.openDocument() },
-                    onLocation: {
-                        mediaAttachmentController.openLocation { draft in
-                            appendAttachmentDraft(draft)
-                        }
-                    },
+                    onLocation: { mediaAttachmentController.openLocation() },
                     onAudio: { mediaAttachmentController.openAudio() }
                 )
             }
@@ -569,17 +571,6 @@ struct SwitchboardConversationDetailView: View {
         )
         .onAppear {
             loadMessages()
-        }
-    }
-    
-    private func appendAttachmentDraft(_ draft: String) {
-        if messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            messageText = draft
-        } else {
-            messageText += "\n\(draft)"
-        }
-        withAnimation(.easeInOut(duration: 0.3)) {
-            showMediaOptions = false
         }
     }
     
@@ -694,22 +685,37 @@ struct SwitchboardEnhancedMessageInputView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Media options (when expanded)
+            // Media options sit above the composer so hit targets are never under the keyboard/home bar.
             if showMediaOptions {
                 SwitchboardMediaOptionsView(
-                    onPhoto: onPhoto,
-                    onCamera: onCamera,
-                    onDocument: onDocument,
-                    onLocation: onLocation,
-                    onAudio: onAudio
+                    onPhoto: {
+                        isTextFieldFocused = false
+                        onPhoto()
+                    },
+                    onCamera: {
+                        isTextFieldFocused = false
+                        onCamera()
+                    },
+                    onDocument: {
+                        isTextFieldFocused = false
+                        onDocument()
+                    },
+                    onLocation: {
+                        isTextFieldFocused = false
+                        onLocation()
+                    },
+                    onAudio: {
+                        isTextFieldFocused = false
+                        onAudio()
+                    }
                 )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            
-            // Message input bar
+
             HStack(spacing: DesignSystem.Spacing.sm) {
-                // Media button
                 Button(action: {
+                    isTextFieldFocused = false
                     withAnimation(.easeInOut(duration: 0.3)) {
                         showMediaOptions.toggle()
                     }
@@ -717,13 +723,14 @@ struct SwitchboardEnhancedMessageInputView: View {
                     Image(systemName: showMediaOptions ? "chevron.up" : "plus")
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(DesignSystem.Colors.secondary)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                         .background(DesignSystem.Colors.surface)
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("switchboard.mediaToggle")
-                
-                // Text input
+
                 HStack(spacing: DesignSystem.Spacing.xs) {
                     TextField("Message", text: $messageText, axis: .vertical)
                         .textFieldStyle(PlainTextFieldStyle())
@@ -735,8 +742,7 @@ struct SwitchboardEnhancedMessageInputView: View {
                         .padding(.vertical, DesignSystem.Spacing.sm)
                         .background(DesignSystem.Colors.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
-                    
-                    // Send button
+
                     Button(action: {
                         onSend()
                     }) {
@@ -750,6 +756,7 @@ struct SwitchboardEnhancedMessageInputView: View {
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.md)
             .background(DesignSystem.Colors.background)
+            .zIndex(1)
         }
     }
 }
@@ -763,40 +770,43 @@ struct SwitchboardMediaOptionsView: View {
     let onAudio: () -> Void
 
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.lg) {
-            SwitchboardMediaOptionButton(
-                icon: "photo",
-                title: "Photo",
-                action: onPhoto
-            )
-            
-            SwitchboardMediaOptionButton(
-                icon: "camera",
-                title: "Camera",
-                action: onCamera
-            )
-            
-            SwitchboardMediaOptionButton(
-                icon: "doc",
-                title: "Document",
-                action: onDocument
-            )
-            
-            SwitchboardMediaOptionButton(
-                icon: "location",
-                title: "Location",
-                action: onLocation
-            )
-            
-            SwitchboardMediaOptionButton(
-                icon: "headphones",
-                title: "Audio",
-                action: onAudio
-            )
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignSystem.Spacing.lg) {
+                SwitchboardMediaOptionButton(
+                    icon: "photo",
+                    title: "Photo",
+                    action: onPhoto
+                )
+
+                SwitchboardMediaOptionButton(
+                    icon: "camera",
+                    title: "Camera",
+                    action: onCamera
+                )
+
+                SwitchboardMediaOptionButton(
+                    icon: "doc",
+                    title: "Document",
+                    action: onDocument
+                )
+
+                SwitchboardMediaOptionButton(
+                    icon: "location",
+                    title: "Location",
+                    action: onLocation
+                )
+
+                SwitchboardMediaOptionButton(
+                    icon: "headphones",
+                    title: "Audio",
+                    action: onAudio
+                )
+            }
+            .padding(.horizontal, DesignSystem.Spacing.lg)
+            .padding(.vertical, DesignSystem.Spacing.md)
         }
-        .padding(.horizontal, DesignSystem.Spacing.lg)
-        .padding(.vertical, DesignSystem.Spacing.md)
         .background(DesignSystem.Colors.surface)
+        .allowsHitTesting(true)
     }
 }
 
@@ -820,8 +830,12 @@ struct SwitchboardMediaOptionButton: View {
                     .font(DesignSystem.Typography.caption)
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
+            .frame(minWidth: 56, minHeight: 72)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("switchboard.attach.\(title.lowercased())")
+        .accessibilityLabel(title)
     }
 }
 
@@ -879,7 +893,10 @@ struct SwitchboardMessageInputView: View {
         VStack(spacing: 0) {
             // Media options (when expanded)
             if showMediaOptions {
-                MediaOptionsView()
+                MediaOptionsView(
+                    messageText: $messageText,
+                    showMediaOptions: $showMediaOptions
+                )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
@@ -935,39 +952,33 @@ struct SwitchboardMessageInputView: View {
     }
 }
 
-// MARK: - Media Options View
+// MARK: - Media Options View (legacy — forwards to Switchboard attachment controller)
 struct MediaOptionsView: View {
+    @StateObject private var mediaAttachmentController = SwitchboardMediaAttachmentController()
+    @Binding var messageText: String
+    @Binding var showMediaOptions: Bool
+
+    init(
+        messageText: Binding<String> = .constant(""),
+        showMediaOptions: Binding<Bool> = .constant(false)
+    ) {
+        _messageText = messageText
+        _showMediaOptions = showMediaOptions
+    }
+
     var body: some View {
-        HStack(spacing: DesignSystem.Spacing.lg) {
-            MediaOptionButton(
-                icon: "photo",
-                title: "Photo",
-                action: { /* Photo picker */ }
-            )
-            
-            MediaOptionButton(
-                icon: "gif",
-                title: "GIF",
-                action: { /* GIF picker */ }
-            )
-            
-            MediaOptionButton(
-                icon: "camera",
-                title: "Camera",
-                action: { /* Camera */ }
-            )
-            
-            MediaOptionButton(
-                icon: "doc",
-                title: "Document",
-                action: { /* Document picker */ }
-            )
-            
-            Spacer()
-        }
-        .padding(.horizontal, DesignSystem.Spacing.lg)
-        .padding(.vertical, DesignSystem.Spacing.md)
-        .background(DesignSystem.Colors.surface)
+        SwitchboardMediaOptionsView(
+            onPhoto: { mediaAttachmentController.openPhoto() },
+            onCamera: { mediaAttachmentController.openCamera() },
+            onDocument: { mediaAttachmentController.openDocument() },
+            onLocation: { mediaAttachmentController.openLocation() },
+            onAudio: { mediaAttachmentController.openAudio() }
+        )
+        .switchboardMediaAttachments(
+            controller: mediaAttachmentController,
+            messageText: $messageText,
+            showMediaOptions: $showMediaOptions
+        )
     }
 }
 
@@ -1608,7 +1619,7 @@ struct P2PConnectionStatusView: View {
                     
                     ConnectionStatusRow(
                         title: "TURN Server",
-                        status: "43.224.35.187:3478",
+                        status: ZeroaAPIConfig.switchboardTURNDisplay,
                         color: .blue
                     )
                 }

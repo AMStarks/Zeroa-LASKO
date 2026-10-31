@@ -14,8 +14,8 @@ class TLSLayer2MessagingService: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let walletService = WalletService.shared
     private var webSocketTask: URLSessionWebSocketTask?
-    private let serverURL = "http://43.224.35.187:8000"
-    private let wsURL = "ws://43.224.35.187:8000/ws"
+    private let serverURL = ZeroaAPIConfig.switchboardHTTPBase
+    private let wsURL = ZeroaAPIConfig.switchboardWebSocketBase
     
     init() {
         setupMockData() // Keep some initial data for UI
