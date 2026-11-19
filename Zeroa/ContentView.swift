@@ -365,6 +365,7 @@ struct CreateAccountView: View {
                                 .font(DesignSystem.Typography.bodyMedium)
                                 .foregroundColor(DesignSystem.Colors.text)
                                 .multilineTextAlignment(.leading)
+                                .accessibilityIdentifier("createAccount.mnemonic")
                             
                             Spacer()
                             
@@ -374,6 +375,7 @@ struct CreateAccountView: View {
                                         .foregroundColor(DesignSystem.Colors.secondary)
                                         .font(.system(size: 20))
                                 }
+                                .accessibilityIdentifier("createAccount.revealPhrase")
                                 
                                 Button(action: {
                                     UIPasteboard.general.string = mnemonic

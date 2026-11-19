@@ -14,10 +14,7 @@ class WalletService {
     }
 
     func generateMnemonic() -> String {
-        let words = ["apple", "banana", "cherry", "date", "elder", "fig", "grape", "honey", "ice", "juice", "kiwi", "lemon"]
-        let mnemonic = (0..<12).map { _ in words.randomElement()! }.joined(separator: " ")
-        print("Generated mnemonic: \(mnemonic)")
-        return mnemonic
+        BIP39.generate()
     }
 
     func importMnemonic(_ mnemonic: String, completion: @escaping (Bool, String?) -> Void) {

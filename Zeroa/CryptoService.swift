@@ -50,7 +50,8 @@ final class CryptoService {
             let digest = SHA256.hash(data: messageData)
             let privateKey = try Secp.Signing.PrivateKey(dataRepresentation: privKeyData)
             let signature = try privateKey.signature(for: digest)
-            let sigRaw = signature.dataRepresentation // 64 bytes r||s
+            // compactRepresentation is r||s. dataRepresentation is libsecp256k1's internal form, which Halo rejects.
+            let sigRaw = signature.compactRepresentation
             return sigRaw.base64EncodedString()
         } catch {
             return nil
