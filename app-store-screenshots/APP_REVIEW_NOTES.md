@@ -28,4 +28,4 @@ Launch with `-DEMO_MODE` or `-UI_TEST_SCREENSHOTS` for screenshots. A normal App
 4. Delete Account — menu → Settings → Delete Account.
 
 ## Support URL
-`https://telestai.org/faq` does not resolve from this network. `https://docs.telestai.io` returns HTTP 200. In-app support is Support & Help, plus `mailto:support@telestai.com`.
+`https://telestai.org/faq` is not a registered domain, so it cannot resolve. Set the App Store Connect Support URL to `https://halo.telestai.io/support` (the same text is also at `https://halo.telestai.io/faq`). That page shows the support email, Discord, and how account deletion works. In-app support is Support & Help, plus `mailto:support@telestai.com`.
