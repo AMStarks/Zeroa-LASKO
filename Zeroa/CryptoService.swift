@@ -57,6 +57,16 @@ final class CryptoService {
         }
     }
 
+    func telestaiAddress(privateKeyHex: String) -> String? {
+        guard let privKeyData = Data(hexString: privateKeyHex), privKeyData.count == 32 else { return nil }
+        do {
+            let privateKey = try Secp.Signing.PrivateKey(dataRepresentation: privKeyData)
+            return TelestaiAddress.fromCompressedPublicKey(privateKey.publicKey.dataRepresentation)
+        } catch {
+            return nil
+        }
+    }
+
     // Returns compressed public key hex (33 bytes) derived from stored private key
     func getCompressedPublicKeyHex(keychain: KeychainService) -> String? {
         guard let privHex = keychain.read(key: "wallet_private_key") else { return nil }

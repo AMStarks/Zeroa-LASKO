@@ -33,6 +33,11 @@ class NetworkService {
         print("🌐 Making API request to: \(apiUrl)")
         print("📝 Input length: \(input.count)")
 
+        guard ZeroaFeatureFlags.aiFeaturesEnabled else {
+            completion(.failure(AIConsentError.consentDeclined))
+            return
+        }
+
         if AISecretGuard.containsSensitiveSecrets(input) {
             print("🛑 Blocked AI request — prompt appears to contain wallet secrets")
             completion(.failure(AIConsentError.containsSecrets))

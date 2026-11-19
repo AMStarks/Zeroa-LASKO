@@ -1,41 +1,31 @@
-# Notes for App Review — Zeroa 1.1.1 (4)
+# Notes for App Review — Zeroa 1.1.1 (8)
+
+## Scope of this build
+This build is wallet-only.
+
+- Included: create or restore a wallet, view balances, Send, Receive, Settings, Support, Delete Account
+- Not in this build: Switchboard messaging, AI / Nova / xAI, Network Stats
+
+Messaging and AI are not in the menu. Their network clients stay off.
+
+## Account deletion (Guideline 5.1.1)
+1. Create an account, or sign in with a recovery phrase.
+2. Open the bottom menu, then **Settings**, then **Delete Account**. The same button is on **Profile**.
+3. The screen says deleting the account does not affect on-chain funds, and it asks the user to back up the recovery phrase.
+4. Turn on **I have written down my recovery phrase**, tap **Delete Account**, then confirm.
+5. The app signs a Halo challenge and calls `POST https://halo.telestai.io/api/halo/account/delete`. That deletes the Halo account data for the wallet address (sign-in material and indexed posts). It does not move coins.
+6. After Halo accepts the deletion, the app wipes the wallet from this device and returns to the login screen.
+
+There is no website step. Deletion finishes in the app.
 
 ## Demo / screenshot mode
-Launch with argument **`-DEMO_MODE`** or **`-UI_TEST_SCREENSHOTS`** (already used by our UI tests).
-
-In demo mode the app:
-- Skips the empty login gate and opens the wallet home
-- Seeds a demo TLS wallet / balances for screenshots
-- Shows Switchboard contacts (Alice, Bob, Carol) so messaging is reachable without backend signup
-- **Pre-grants AI data-sharing consent** so screenshot automation is not blocked by the consent sheet
+Launch with `-DEMO_MODE` or `-UI_TEST_SCREENSHOTS` for screenshots. A normal App Review install does not use that mode.
 
 ## How to reach each feature
-1. **Wallet balances** — Home screen after launch (demo mode opens here automatically).
-2. **Send / Receive** — Home → **Send** or **Receive**.
-3. **Messages (Switchboard)** — Bottom **messaging** tab, or Menu → **Hybrid Messaging**. Open **Alice** for a conversation.
-4. **Attachments** — In a Switchboard conversation, tap **+** to expand Photo, Camera, Document, Location, Audio.
-5. **AI features & consent** — Bottom **AI** tab opens **AI Features**.
-   - First launch (non-demo): **Allow** / **Not now** consent explains that prompts go to **xAI**, links to the Privacy Policy, and lists what is / isn’t sent.
-   - **Not now** blocks AI network calls and shows a gentle enable prompt.
-   - **Settings → AI data sharing** toggle grants or revokes consent anytime.
-6. **PowDEX** — Not shipped as a standalone tab in this Zeroa build.
+1. Wallet balances — home after sign-in.
+2. Send / Receive — home buttons. Send does not broadcast a transaction in this version and says so. It does not show a fake success.
+3. Settings / Support — bottom menu.
+4. Delete Account — menu → Settings → Delete Account.
 
-## Why each permission is requested
-| Permission | Purpose |
-|------------|---------|
-| **Camera** | Attach a photo taken in-app to a Switchboard message |
-| **Photo Library** | Attach an existing image to a Switchboard message |
-| **Microphone** | Record a short voice clip for a Switchboard message |
-| **Location When In Use** | Share the user’s current coordinates in a Switchboard message |
-
-Denials show an alert with **Open Settings**.
-
-## Networking notes for reviewers
-- Switchboard uses **`https://api.telestai.io`** (WSS for realtime). No raw IP endpoints and no ATS arbitrary-load exceptions in the app Info.plist.
-- AI calls go only to **`https://api.x.ai`** after consent; recovery phrases / private keys are blocked client-side.
-
-## Suggested review path (2 minutes)
-1. Launch (demo mode if provided via TestFlight notes).
-2. Confirm home balances are visible.
-3. Open Switchboard → Alice → tap **+** → Photo / Document / Location / Audio (Camera on device).
-4. Open **AI** tab (demo: consent already granted) or decline/allow once on a clean install; confirm Settings toggle.
+## Support URL
+`https://telestai.org/faq` does not resolve from this network. `https://docs.telestai.io` returns HTTP 200. In-app support is Support & Help, plus `mailto:support@telestai.com`.

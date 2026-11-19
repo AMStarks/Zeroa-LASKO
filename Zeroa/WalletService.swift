@@ -27,8 +27,12 @@ class WalletService {
             return
         }
         
-        // Derive address from mnemonic
         let derivedAddress = deriveAddressFromMnemonic(mnemonic)
+        guard !derivedAddress.isEmpty else {
+            print("Could not derive a Telestai address")
+            completion(false, nil)
+            return
+        }
         print("Derived address: \(derivedAddress)")
         
         let success = keychain.save(key: "wallet_address", value: derivedAddress)
@@ -42,9 +46,8 @@ class WalletService {
     }
     
     private func deriveAddressFromMnemonic(_ mnemonic: String) -> String {
-        // Placeholder: keep returning the known address until full BIP39/BIP32 is wired
-        // This ensures UI shows the correct TLS address while we finish key derivation
-        return "ThGNWv22Mb89YwMKo8hAgTEL5ChWcnNuRJ"
+        let privateKeyHex = derivePrivateKeyHex(from: mnemonic)
+        return CryptoService.shared.telestaiAddress(privateKeyHex: privateKeyHex) ?? ""
     }
 
     // Temporary: deterministic private key hex from mnemonic hash (32 bytes) for signing

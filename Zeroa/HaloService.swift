@@ -10,7 +10,7 @@ final class HaloService: ObservableObject {
     private let api = HaloAPIService.shared
     private let wallet = WalletService.shared
 
-    func ensureToken(bundleId: String = "com.telestai.Zeroa") async {
+    func ensureToken(bundleId: String = "com.zeroa.wallet") async {
         guard let address = wallet.loadAddress() else { print("❌ HaloService: No TLS address loaded, abort ensureToken"); return }
         let now = Int64(Date().timeIntervalSince1970)
         if let (tok, exp) = api.storedToken(), exp - now > 60 {
@@ -45,6 +45,30 @@ final class HaloService: ObservableObject {
             self.isAuthenticated = false
             print("❌ Halo auth failed: \(error)")
         }
+    }
+
+    /// Proves ownership with a Halo challenge, then deletes that address's Halo account data.
+    func deleteAccount(bundleId: String = "com.zeroa.wallet") async throws {
+        guard let address = wallet.loadAddress(), !address.isEmpty else {
+            throw HaloAccountDeletionError.missingWallet
+        }
+        let challenge = try await api.requestChallenge(address: address, bundleId: bundleId)
+        let canonical = "LASKO|\(challenge.nonce)|\(challenge.ttlSeconds)|\(bundleId)"
+        guard let signature = CryptoService.shared.signMessageBase64(canonical, keychain: wallet.keychain),
+              let pubHex = CryptoService.shared.getCompressedPublicKeyHex(keychain: wallet.keychain),
+              !pubHex.isEmpty else {
+            throw HaloAccountDeletionError.signatureFailed
+        }
+        try await api.deleteAccount(
+            address: address,
+            bundleId: bundleId,
+            nonce: challenge.nonce,
+            signature: signature,
+            pubkeyCompressedHex: pubHex
+        )
+        api.clearStoredToken()
+        self.isAuthenticated = false
+        self.tokenExp = 0
     }
 }
 

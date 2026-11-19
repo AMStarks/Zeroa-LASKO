@@ -19,6 +19,11 @@ class TLSLayer2MessagingService: ObservableObject {
     
     init() {
         setupMockData() // Keep some initial data for UI
+        // App Store wallet-only: do not dial Switchboard until the feature ships again.
+        guard ZeroaFeatureFlags.switchboardEnabled else {
+            connectionStatus = "Unavailable"
+            return
+        }
         startConnection()
     }
     
@@ -45,6 +50,11 @@ class TLSLayer2MessagingService: ObservableObject {
     }
     
     func startConnection() {
+        guard ZeroaFeatureFlags.switchboardEnabled else {
+            connectionStatus = "Unavailable"
+            isConnected = false
+            return
+        }
         // Connect to WebSocket for real-time messaging
         connectWebSocket()
         

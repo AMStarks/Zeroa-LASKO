@@ -104,6 +104,67 @@ final class HaloAPIService {
         }
         return try JSONDecoder().decode(VerifyResponse.self, from: data)
     }
+
+    func clearStoredToken() {
+        guard let defaults = appGroups.sharedDefaults else { return }
+        for key in ["halo_access_token", "halo_token_expires_at", "haloAccessToken", "halo_token_refreshed_at"] {
+            defaults.removeObject(forKey: key)
+        }
+        defaults.synchronize()
+    }
+
+    /// Deletes the Halo account for this wallet. The caller must already hold a fresh challenge signature.
+    func deleteAccount(address: String, bundleId: String, nonce: String, signature: String, pubkeyCompressedHex: String) async throws {
+        let url = baseURL.appendingPathComponent("halo/account/delete")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue(bundleId, forHTTPHeaderField: "X-Bundle-Id")
+        let body: [String: String] = [
+            "address": address,
+            "bundleId": bundleId,
+            "nonce": nonce,
+            "signature": signature,
+            "pubkey": pubkeyCompressedHex
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? -1
+        guard status == 200 else {
+            let text = String(data: data, encoding: .utf8) ?? ""
+            throw HaloAccountDeletionError.server(status: status, body: text)
+        }
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let success = obj["success"] as? Bool, success == false {
+            throw HaloAccountDeletionError.server(status: status, body: String(data: data, encoding: .utf8) ?? "")
+        }
+    }
+}
+
+enum HaloAccountDeletionError: LocalizedError {
+    case missingWallet
+    case signatureFailed
+    case server(status: Int, body: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingWallet:
+            return "No wallet is signed in, so there is no account to delete."
+        case .signatureFailed:
+            return "Could not sign the deletion request with this wallet."
+        case .server(let status, let body):
+            if status == 404 {
+                return "Halo does not have account deletion turned on yet (HTTP 404). Your account was not deleted."
+            }
+            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return "Halo refused the deletion (HTTP \(status)). Your account was not deleted."
+            }
+            return "Halo refused the deletion (HTTP \(status)). Your account was not deleted. \(trimmed)"
+        }
+    }
 }
 
 

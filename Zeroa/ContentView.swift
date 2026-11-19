@@ -21,6 +21,27 @@ func formatWithThousandsSeparators(_ integerPart: String) -> String {
     return String(result.reversed())
 }
 
+/// Coin amount for list/hero rows. BTC needs more than 2 dp so 0.0425 does not collapse to 0.04.
+func formatCoinBalanceDisplay(_ balance: Double, coin: String) -> String {
+    let fractionDigits: Int
+    switch coin {
+    case "Bitcoin":
+        fractionDigits = 4
+    case "Litecoin":
+        fractionDigits = 2
+    case "Kaspa", "Telestai", "Flux", "USDT", "USDC":
+        fractionDigits = 2
+    default:
+        fractionDigits = 2
+    }
+    let format = "%.\(fractionDigits)f"
+    let balanceFormatted = String(format: format, balance)
+    let parts = balanceFormatted.components(separatedBy: ".")
+    let integerPart = parts[0]
+    let decimalPart = parts.count > 1 ? parts[1] : String(repeating: "0", count: fractionDigits)
+    return "\(formatWithThousandsSeparators(integerPart)).\(decimalPart)"
+}
+
 // MARK: - Models
 struct Message: Identifiable, Codable {
     let id: String
@@ -160,31 +181,26 @@ struct ContentView: View {
                     HomeView(path: $path, tlsService: tlsService)
                 case "create":
                     CreateAccountView(path: $path)
-                case "prioritization":
-                    PrioritizationView(messages: [], path: $path)
-                case "stats":
-                    StatsView(path: $path)
-                case "userPortal":
-                    UserPortalView(path: $path)
                 case "profile":
                     ProfileView(path: $path)
                 case "messaging":
-                    HybridMessagingView()
+                    if ZeroaFeatureFlags.switchboardEnabled {
+                        HybridMessagingView()
+                    } else {
+                        EmptyView()
+                    }
                 case "settings":
                     SettingsView(path: $path)
                 case "support":
                     SupportView(path: $path)
                 case "ai":
-                    AIFeaturesView(path: $path)
-                case "ai-companion":
-                    // CompanionManagementView(path: $path) // Moved to inactive
-                    Text("Companion Management - Feature Disabled")
-                case "ai-companion-conversation":
-                    // CompanionConversationView() // Moved to inactive
-                    Text("Companion Conversation - Feature Disabled")
-                case "ai-companion-settings":
-                    // CompanionSettingsView() // Moved to inactive
-                    Text("Companion Settings - Feature Disabled")
+                    if ZeroaFeatureFlags.aiFeaturesEnabled {
+                        AIFeaturesView(path: $path)
+                    } else {
+                        EmptyView()
+                    }
+                case "prioritization", "stats", "userPortal", "ai-companion", "ai-companion-conversation", "ai-companion-settings":
+                    EmptyView()
                 // case "tinyllama-chat":
                 //     TinyLlamaChatView()
 
@@ -214,15 +230,9 @@ struct ContentView: View {
             TransactionHistoryView()
         }
         .sheet(isPresented: $showMessaging) {
-            HybridMessagingView()
-        }
-        .sheet(isPresented: $showNewChat) {
-            // NewChatView( // Moved to inactive
-            //     newContactName: $newContactName,
-            //     newContactAddress: $newContactAddress,
-            //     conversations: $conversations
-            // )
-            Text("New Chat - Feature Disabled")
+            if ZeroaFeatureFlags.switchboardEnabled {
+                HybridMessagingView()
+            }
         }
         .sheet(isPresented: $showSignInModal) {
             SignInModalView(
@@ -292,6 +302,7 @@ struct ContentView: View {
         ZeroaDemoMode.prepareForLaunch()
 
         if walletService.loadAddress() != nil {
+            AppGroupsService.shared.storeTLSAddress(walletService.loadAddress() ?? ZeroaDemoMode.demoTLSAddress)
             if path.isEmpty {
                 path.append("home")
             }
@@ -301,11 +312,11 @@ struct ContentView: View {
         // Deterministic demo mnemonic for App Store screenshots / App Review demo mode.
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
         walletService.importMnemonic(mnemonic) { success, _ in
-            if success {
-                AppGroupsService.shared.storeTLSAddress(walletService.loadAddress() ?? "TdemoZeroaScreenshotAddress111111")
-                path.append("home")
-            } else if path.isEmpty {
-                // Still enter home so screenshot automation is never stuck on login.
+            let address = success
+                ? (walletService.loadAddress() ?? ZeroaDemoMode.demoTLSAddress)
+                : ZeroaDemoMode.demoTLSAddress
+            AppGroupsService.shared.storeTLSAddress(address)
+            if path.isEmpty {
                 path.append("home")
             }
         }
@@ -580,6 +591,9 @@ struct HomeView: View {
     @State private var litecoinPriceHistory: [Double] = []
     @State private var fluxPriceHistory: [Double] = []
     @State private var kaspaPriceHistory: [Double] = []
+
+    /// Flux balance must not share `coinBalance` (that field tracks the selected coin).
+    @State private var fluxBalance: Double = 0.0
     
     // Legacy TLS variables for backward compatibility
     @State private var tlsBalance: Double = 0.0
@@ -588,7 +602,7 @@ struct HomeView: View {
     
     // Personal Information
     @State private var profilePicture: UIImage?
-    @State private var displayName = "PAAI User"
+    @State private var displayName = ""
     @State private var userBio = ""
     @State private var userLocation = ""
     @State private var socialLinks: [String: String] = [:]
@@ -614,7 +628,7 @@ struct HomeView: View {
     @State private var showBugReport = false
     @State private var bugDescription = ""
     @State private var bugCategory = "General"
-    @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
+    @State private var bugCategories = ["General", "Wallet", "Send or Receive", "Display", "Performance", "Security"]
     
     // Transaction Actions
     @State private var showSendSheet = false
@@ -647,6 +661,11 @@ struct HomeView: View {
     }
 
     private func loadCoinDataAsync() async {
+        if ZeroaDemoMode.isEnabled {
+            await MainActor.run { applyDemoMarketData(for: selectedCoin) }
+            return
+        }
+
         // Update coin-specific data based on selection
         switch selectedCoin {
         case "Telestai":
@@ -1096,14 +1115,24 @@ struct HomeView: View {
     }
     
     private func loadFluxData() async {
+        if ZeroaDemoMode.isEnabled {
+            await MainActor.run { applyDemoMarketData(for: "Flux") }
+            return
+        }
         // Load Flux balance (App Groups address) and price
         let fluxAddr = AppGroupsService.shared.getFluxAddress()
         if let addr = fluxAddr, !addr.isEmpty {
             let fluxService = FluxService()
             let bal = await fluxService.getBalance(address: addr)
-            await MainActor.run { self.coinBalance = bal.total }
+            await MainActor.run {
+                self.fluxBalance = bal.total
+                self.coinBalance = bal.total
+            }
         } else {
-            await MainActor.run { self.coinBalance = 0.0 }
+            await MainActor.run {
+                self.fluxBalance = 0.0
+                self.coinBalance = 0.0
+            }
         }
         // Load real price data from CoinGecko
         await loadFluxPrice()
@@ -1839,48 +1868,38 @@ struct HomeView: View {
     
     // MARK: - Helper Functions for Coin Data
     private func getCoinBalance(for coin: String) -> Double {
+        if ZeroaDemoMode.isEnabled {
+            return ZeroaDemoMode.balance(for: coin)
+        }
         switch coin {
         case "Telestai":
             return tlsBalance
-        case "Bitcoin":
-            return 0.0
-        case "USDT":
-            return 0.0
-        case "USDC":
-            return 0.0
-        case "Litecoin":
-            return 0.0
         case "Flux":
-            return coinBalance
-        case "Kaspa":
-            return 0.0
+            return fluxBalance
         default:
             return 0.0
         }
     }
     
     private func getCoinPrice(for coin: String) -> Double {
+        if ZeroaDemoMode.isEnabled {
+            return ZeroaDemoMode.priceUSD(for: coin)
+        }
         switch coin {
         case "Telestai":
             return tlsPrice
-        case "Bitcoin":
-            return coinPrice
-        case "USDT":
-            return coinPrice
-        case "USDC":
-            return coinPrice
-        case "Litecoin":
-            return coinPrice
-        case "Flux":
-            return coinPrice
-        case "Kaspa":
-            return coinPrice
+        case "Bitcoin", "USDT", "USDC", "Litecoin", "Flux", "Kaspa":
+            // Selected-coin price lives in `coinPrice` after that coin's loader runs.
+            return selectedCoin == coin ? coinPrice : 0.0
         default:
             return 0.0
         }
     }
     
     private func getCoinPriceChange(for coin: String) -> Double {
+        if ZeroaDemoMode.isEnabled {
+            return ZeroaDemoMode.change24h(for: coin)
+        }
         switch coin {
         case "Telestai":
             return tlsPriceChange
@@ -1898,6 +1917,43 @@ struct HomeView: View {
             return 8.7 // Mock change
         default:
             return 0.0
+        }
+    }
+
+    private func applyDemoMarketData(for coin: String) {
+        let balance = ZeroaDemoMode.balance(for: coin)
+        let price = ZeroaDemoMode.priceUSD(for: coin)
+        let change = ZeroaDemoMode.change24h(for: coin)
+        let history = ZeroaDemoMode.history(for: coin)
+
+        coinBalance = balance
+        coinPrice = price
+        coinPriceChange = change
+        priceHistory = history
+        isLoadingPrice = false
+        isLoadingHistory = false
+
+        switch coin {
+        case "Telestai":
+            tlsBalance = balance
+            tlsPrice = price
+            tlsPriceChange = change
+            tlsPriceHistory = history
+        case "Bitcoin":
+            bitcoinPriceHistory = history
+        case "Litecoin":
+            litecoinPriceHistory = history
+        case "Flux":
+            fluxBalance = balance
+            fluxPriceHistory = history
+        case "Kaspa":
+            kaspaPriceHistory = history
+        case "USDT":
+            usdtPriceHistory = history
+        case "USDC":
+            usdcPriceHistory = history
+        default:
+            break
         }
     }
     
@@ -2012,15 +2068,7 @@ struct HomeView: View {
                                     }
                                     
                                     // Coin amount below in smaller font
-                                    // Format balance with 2 decimal places and thousands separators
-                                    let balanceFormatted = String(format: "%.2f", coinBalance)
-                                    let parts = balanceFormatted.components(separatedBy: ".")
-                                    let integerPart = parts[0]
-                                    let decimalPart = parts.count > 1 ? parts[1] : "00"
-                                    
-                                    let thousandsFormatted = formatWithThousandsSeparators(integerPart)
-                                    
-                                    Text("\(thousandsFormatted).\(decimalPart) \(selectedCoin)")
+                                    Text("\(formatCoinBalanceDisplay(coinBalance, coin: selectedCoin)) \(selectedCoin)")
                                         .font(DesignSystem.Typography.bodyMedium)
                                         .foregroundColor(DesignSystem.Colors.textSecondary)
                                         .multilineTextAlignment(.center)
@@ -2502,11 +2550,7 @@ struct HomeView: View {
     
     private func loadTLSData() async {
         if ZeroaDemoMode.isEnabled {
-            tlsBalance = ZeroaDemoMode.demoTLSBalance
-            coinBalance = ZeroaDemoMode.demoTLSBalance
-            coinPrice = ZeroaDemoMode.demoTLSPriceUSD
-            isLoadingPrice = false
-            isLoadingHistory = false
+            await MainActor.run { applyDemoMarketData(for: "Telestai") }
             return
         }
 
@@ -3121,15 +3165,7 @@ struct CoinRowView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    // Format balance with 2 decimal places and thousands separators
-                    let balanceFormatted = String(format: "%.2f", balance)
-                    let parts = balanceFormatted.components(separatedBy: ".")
-                    let integerPart = parts[0]
-                    let decimalPart = parts.count > 1 ? parts[1] : "00"
-                    
-                    let thousandsFormatted = formatWithThousandsSeparators(integerPart)
-                    
-                    Text("\(thousandsFormatted).\(decimalPart) \(coin)")
+                    Text("\(formatCoinBalanceDisplay(balance, coin: coin)) \(coin)")
                         .font(DesignSystem.Typography.bodySmall)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
@@ -3208,44 +3244,14 @@ struct BottomNavigationView: View {
                     .frame(maxWidth: .infinity)
             }
             
-            // Messaging Tab
+            // Menu Tab (wallet-only: Switchboard + AI tabs gated off)
             Button(action: {
                 selectedTab = 1
-                path.append("messaging")
-            }) {
-                Image(systemName: selectedTab == 1 ? "message.circle.fill" : "message.circle")
-                    .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(selectedTab == 1 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                    .frame(maxWidth: .infinity)
-            }
-            .accessibilityIdentifier("bottomNav.messaging")
-            
-            // AI Features (consent-gated xAI / Nova)
-            Button(action: {
-                selectedTab = 2
-                path.append("ai")
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: "atom")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                    
-                    Text("AI")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(selectedTab == 2 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .accessibilityIdentifier("bottomNav.ai")
-            
-            // Menu Tab
-            Button(action: {
-                selectedTab = 3
                 showHamburgerMenu = true
             }) {
-                Image(systemName: selectedTab == 3 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
+                Image(systemName: selectedTab == 1 ? "line.3.horizontal.circle.fill" : "line.3.horizontal.circle")
                     .font(.system(size: 32, weight: .medium))
-                    .foregroundColor(selectedTab == 3 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
+                    .foregroundColor(selectedTab == 1 ? DesignSystem.Colors.secondary : DesignSystem.Colors.textSecondary)
                     .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("bottomNav.menu")
@@ -3303,14 +3309,11 @@ struct HamburgerMenuView: View {
                 // Menu Items
                 ScrollView {
                     VStack(spacing: 0) {
-                        MenuButton(title: "Network Stats", icon: "chart.bar") {
-                            path.append("stats")
-                            showHamburgerMenu = false
-                        }
-                        
-                        MenuButton(title: "AI Features", icon: "brain.head.profile") {
-                            path.append("ai")
-                            showHamburgerMenu = false
+                        if ZeroaFeatureFlags.aiFeaturesEnabled {
+                            MenuButton(title: "AI Features", icon: "brain.head.profile") {
+                                path.append("ai")
+                                showHamburgerMenu = false
+                            }
                         }
                         
                         MenuButton(title: "Settings", icon: "gearshape") {
@@ -3375,7 +3378,7 @@ struct ProfileView: View {
     @State private var autoRespond = false
     @State private var profileImage: UIImage?
     @State private var showImagePicker = false
-    @State private var displayName = "PAAI User"
+    @State private var displayName = ""
     @State private var userBio = ""
     @State private var userLocation = ""
     @State private var biometricEnabled = true
@@ -3390,6 +3393,7 @@ struct ProfileView: View {
     @State private var analyticsData: AnalyticsData?
     @State private var activeSessions: [SessionInfo] = []
     @State private var showEditPersonalInfo = false
+    @State private var showDeleteAccount = false
     @State private var showLanguagePicker = false
     @State private var showCurrencyPicker = false
     @State private var showThemePicker = false
@@ -3532,31 +3536,7 @@ struct ProfileView: View {
                             }
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
-                        // Streaming Switch
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Stream Metadata")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    Toggle("Enable", isOn: $isStreaming)
-                                        .font(DesignSystem.Typography.bodyMedium)
-                                        .foregroundColor(DesignSystem.Colors.text)
-                                        .onChange(of: isStreaming, initial: false) { oldValue, newValue in
-                                            UserDefaults.standard.set(newValue, forKey: "user_streaming_enabled")
-                                        }
-                                    
-                                    Text("Sell your data to Advertisers")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        .multilineTextAlignment(.leading)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
+
                         // Wallet Info
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
@@ -3592,45 +3572,24 @@ struct ProfileView: View {
                                         .background(DesignSystem.Colors.surface.opacity(0.5))
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                     }
-                                    
-                                    Text("Subscription: \(walletService.checkSubscription() ? "Active" : "Inactive")")
-                                        .font(DesignSystem.Typography.bodyMedium)
-                                        .foregroundColor(walletService.checkSubscription() ? DesignSystem.Colors.success : DesignSystem.Colors.error)
                                 }
                             }
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
-                        // Analytics
-                        CardView {
-                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Analytics")
-                                    .font(DesignSystem.Typography.headline)
-                                    .foregroundColor(DesignSystem.Colors.text)
-                                
-                                Button(action: {
-                                    showAnalytics = true
-                                }) {
-                                    HStack {
-                                        Image(systemName: "chart.bar.fill")
-                                            .foregroundColor(DesignSystem.Colors.secondary)
-                                        Text("View Usage Analytics")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                                    }
-                                    .padding(.vertical, DesignSystem.Spacing.sm)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
 
-                        
-                        // Action Buttons
                         VStack(spacing: DesignSystem.Spacing.md) {
+                            Button(action: { showDeleteAccount = true }) {
+                                Text("Delete Account")
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(DesignSystem.Colors.error)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, DesignSystem.Spacing.md)
+                                    .background(DesignSystem.Colors.error.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .accessibilityIdentifier("profile.deleteAccount")
+
                             PrimaryButton("Log Out") {
                                 logout()
                             }
@@ -3658,8 +3617,13 @@ struct ProfileView: View {
         .sheet(isPresented: $showAnalytics) {
             AnalyticsView(analyticsData: $analyticsData)
         }
-        .sheet(isPresented: $showEditPersonalInfo) {
+        .sheet(isPresented: $showEditPersonalInfo, onDismiss: saveProfile) {
             EditPersonalInfoView(displayName: $displayName, userBio: $userBio, userLocation: $userLocation)
+        }
+        .sheet(isPresented: $showDeleteAccount) {
+            DeleteAccountView {
+                path = NavigationPath()
+            }
         }
         .sheet(isPresented: $showLanguagePicker) {
             PreferencePickerView(title: "Language", selection: $selectedLanguage, options: availableLanguages, onSelectionChanged: { newLanguage in
@@ -3701,15 +3665,20 @@ struct ProfileView: View {
     }
     
     private func loadSettings() {
-        // Load saved preferences from UserDefaults
         selectedLanguage = UserDefaults.standard.string(forKey: "user_language") ?? "English"
         selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
         selectedTheme = UserDefaults.standard.string(forKey: "user_theme") ?? "Native"
-        isStreaming = UserDefaults.standard.bool(forKey: "user_streaming_enabled")
-        
-        // Apply loaded settings
+        displayName = UserDefaults.standard.string(forKey: "user_display_name") ?? ""
+        userBio = UserDefaults.standard.string(forKey: "user_bio") ?? ""
+        userLocation = UserDefaults.standard.string(forKey: "user_location") ?? ""
         LocalizationManager.shared.currentLanguage = selectedLanguage
         DesignSystem.updateTheme(selectedTheme)
+    }
+
+    private func saveProfile() {
+        UserDefaults.standard.set(displayName, forKey: "user_display_name")
+        UserDefaults.standard.set(userBio, forKey: "user_bio")
+        UserDefaults.standard.set(userLocation, forKey: "user_location")
     }
     
     private func saveLanguage(_ language: String) {
@@ -3991,7 +3960,7 @@ struct SupportView: View {
     @State private var showBugReport = false
     @State private var bugDescription = ""
     @State private var bugCategory = "General"
-    @State private var bugCategories = ["General", "AI Issues", "Payment Issues", "UI/UX", "Performance", "Security"]
+    @State private var bugCategories = ["General", "Wallet", "Send or Receive", "Display", "Performance", "Security"]
     
     var body: some View {
         ZStack {
@@ -4052,6 +4021,21 @@ struct SupportView: View {
                                 .background(DesignSystem.Colors.surface.opacity(0.5))
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                                 
+                                VStack(spacing: DesignSystem.Spacing.md) {
+                                    Text("How do I delete my account?")
+                                        .font(DesignSystem.Typography.bodyMedium)
+                                        .foregroundColor(DesignSystem.Colors.text)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                                    Text("Open the menu, then Settings, then Delete Account. Deleting the account does not affect on-chain funds. Back up your recovery phrase first.")
+                                        .font(DesignSystem.Typography.caption)
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(DesignSystem.Spacing.sm)
+                                .background(DesignSystem.Colors.surface.opacity(0.5))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+
                                 VStack(spacing: DesignSystem.Spacing.md) {
                                     Text("How do I change my theme?")
                                         .font(DesignSystem.Typography.bodyMedium)
@@ -4166,18 +4150,10 @@ struct SupportView: View {
 
 struct SettingsView: View {
     @Binding var path: NavigationPath
-    @State private var biometricEnabled = true
-    @State private var showSessionManagement = false
-    @State private var selectedLanguage = "English"
-    @State private var selectedCurrency = "USD"
     @State private var selectedTheme = "Light"
-    @State private var availableLanguages = ["English", "Spanish", "French", "German", "Chinese"]
-    @State private var availableCurrencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD"]
     @State private var availableThemes = ["Light", "Dark"]
-    @State private var showLanguagePicker = false
-    @State private var showCurrencyPicker = false
     @State private var showThemePicker = false
-    @StateObject private var localizationManager = LocalizationManager.shared
+    @State private var showDeleteAccount = false
     @StateObject private var themeManager = ThemeManager.shared
     
     var body: some View {
@@ -4217,139 +4193,69 @@ struct SettingsView: View {
                 
                 ScrollView {
                     VStack(spacing: DesignSystem.Spacing.lg) {
-                        // AI / xAI consent
-                        AISettingsConsentCard()
-                            .padding(.horizontal, DesignSystem.Spacing.lg)
+                        if ZeroaFeatureFlags.aiFeaturesEnabled {
+                            AISettingsConsentCard()
+                                .padding(.horizontal, DesignSystem.Spacing.lg)
+                        }
                 
-                        // Security & Session Management
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-                                Text("Security & Sessions")
+                                Text("Account")
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
-                                
-                VStack(spacing: DesignSystem.Spacing.md) {
-                                    Toggle("Biometric Authentication", isOn: $biometricEnabled)
-                                        .font(DesignSystem.Typography.bodyMedium)
-                                        .foregroundColor(DesignSystem.Colors.text)
-                                    
-                                    Button(action: {
-                                        showSessionManagement = true
-                                    }) {
-                                        HStack {
-                                            Image(systemName: "iphone")
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Text("Manage Sessions")
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        }
+
+                                Button(action: { showDeleteAccount = true }) {
+                                    HStack {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(DesignSystem.Colors.error)
+                                        Text("Delete Account")
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.error)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
                                     }
                                 }
+                                .accessibilityIdentifier("settings.deleteAccount")
                             }
                         }
                         .padding(.horizontal, DesignSystem.Spacing.lg)
-                        
-                        // Preferences
+
                         CardView {
                             VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
                                 Text(LocalizedString.localized("preferences"))
                                     .font(DesignSystem.Typography.headline)
                                     .foregroundColor(DesignSystem.Colors.text)
-                                
-                                VStack(spacing: DesignSystem.Spacing.md) {
-                                    // Language Button
-                                    Button(action: {
-                                        showLanguagePicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("language"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedLanguage)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                                Button(action: { showThemePicker = true }) {
+                                    HStack {
+                                        Text(LocalizedString.localized("theme"))
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.text)
+                                        Spacer()
+                                        Text(selectedTheme)
+                                            .font(DesignSystem.Typography.bodyMedium)
+                                            .foregroundColor(DesignSystem.Colors.secondary)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(DesignSystem.Colors.secondary)
                                     }
-                                    
-                                    // Currency Button
-                                    Button(action: {
-                                        showCurrencyPicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("currency"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedCurrency)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
-                                    
-                                    // Theme Button
-                                    Button(action: {
-                                        showThemePicker = true
-                                    }) {
-                                        HStack {
-                                            Text(LocalizedString.localized("theme"))
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.text)
-                                            Spacer()
-                                            Text(selectedTheme)
-                                                .font(DesignSystem.Typography.bodyMedium)
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                            Image(systemName: "chevron.down")
-                                                .font(.system(size: 12))
-                                                .foregroundColor(DesignSystem.Colors.secondary)
-                                        }
-                                        .padding(DesignSystem.Spacing.sm)
-                                        .background(DesignSystem.Colors.secondary.opacity(0.1))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    }
+                                    .padding(DesignSystem.Spacing.sm)
+                                    .background(DesignSystem.Colors.secondary.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                 }
-                    }
-                }
-                .padding(.horizontal, DesignSystem.Spacing.lg)
+                            }
+                        }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
                     }
                 }
             }
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showLanguagePicker) {
-            PreferencePickerView(
-                title: "Language",
-                selection: $selectedLanguage,
-                options: availableLanguages,
-                onSelectionChanged: { language in
-                    localizationManager.currentLanguage = language
-                }
-            )
-        }
-        .sheet(isPresented: $showCurrencyPicker) {
-            PreferencePickerView(
-                title: "Currency",
-                selection: $selectedCurrency,
-                options: availableCurrencies,
-                onSelectionChanged: { currency in
-                    UserDefaults.standard.set(currency, forKey: "user_currency")
-                }
-            )
+        .sheet(isPresented: $showDeleteAccount) {
+            DeleteAccountView {
+                path = NavigationPath()
+            }
         }
         .sheet(isPresented: $showThemePicker) {
             PreferencePickerView(
@@ -4361,13 +4267,7 @@ struct SettingsView: View {
                 }
             )
         }
-        .sheet(isPresented: $showSessionManagement) {
-            SessionManagementView(sessions: .constant([]))
-        }
         .onAppear {
-            // Load saved preferences
-            selectedLanguage = UserDefaults.standard.string(forKey: "user_language") ?? "English"
-            selectedCurrency = UserDefaults.standard.string(forKey: "user_currency") ?? "USD"
             selectedTheme = UserDefaults.standard.string(forKey: "user_theme") ?? "Light"
         }
     }
@@ -4403,53 +4303,17 @@ struct SessionManagementView: View {
                     .padding(.top, DesignSystem.Spacing.lg)
                     
                     if sessions.isEmpty {
-                        VStack(spacing: DesignSystem.Spacing.md) {
-                            CardView {
-                                VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                                    HStack {
-                                        Image(systemName: "iphone")
-                                            .foregroundColor(DesignSystem.Colors.secondary)
-                                        Text("iPhone 16 Pro")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Text("Current")
-                                            .font(DesignSystem.Typography.caption)
-                                            .foregroundColor(DesignSystem.Colors.success)
-                                            .padding(.horizontal, DesignSystem.Spacing.sm)
-                                            .padding(.vertical, 2)
-                                            .background(DesignSystem.Colors.success.opacity(0.2))
-                                            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small))
-                                    }
-                                    
-                                    Text("Last active: Just now")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                }
+                        CardView {
+                            VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+                                Text(UIDevice.current.model)
+                                    .font(DesignSystem.Typography.bodyMedium)
+                                    .foregroundColor(DesignSystem.Colors.text)
+                                Text("This is the only signed-in device Zeroa can see.")
+                                    .font(DesignSystem.Typography.caption)
+                                    .foregroundColor(DesignSystem.Colors.textSecondary)
                             }
-                            .padding(.horizontal, DesignSystem.Spacing.lg)
-                            
-                            CardView {
-                                VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
-                                    HStack {
-                                        Image(systemName: "macbook")
-                                            .foregroundColor(DesignSystem.Colors.secondary)
-                                        Text("MacBook Pro")
-                                            .font(DesignSystem.Typography.bodyMedium)
-                                            .foregroundColor(DesignSystem.Colors.text)
-                                        Spacer()
-                                        Text("2 hours ago")
-                                            .font(DesignSystem.Typography.caption)
-                                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                                    }
-                                    
-                                    Text("Last active: 2 hours ago")
-                                        .font(DesignSystem.Typography.caption)
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                                }
-                            }
-                            .padding(.horizontal, DesignSystem.Spacing.lg)
                         }
+                        .padding(.horizontal, DesignSystem.Spacing.lg)
                     } else {
                         ScrollView {
                             LazyVStack(spacing: DesignSystem.Spacing.md) {
@@ -4741,9 +4605,15 @@ struct BugReportView: View {
     }
     
     private func submitBugReport() {
-        // Here you would typically send the bug report to your backend
-        // For now, we'll just show a success message
-        showSuccessAlert = true
+        let subject = "Zeroa bug report (\(bugCategory))"
+        let body = bugDescription
+        let allowed = CharacterSet.urlQueryAllowed
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        let encodedBody = body.addingPercentEncoding(withAllowedCharacters: allowed) ?? ""
+        if let url = URL(string: "mailto:support@telestai.com?subject=\(encodedSubject)&body=\(encodedBody)") {
+            UIApplication.shared.open(url)
+        }
+        dismiss()
     }
 }
 
@@ -4943,24 +4813,19 @@ struct SubscriptionView: View {
                         .font(.system(size: 60))
                         .foregroundColor(DesignSystem.Colors.secondary)
                     
-                    Text("Subscription Required")
+                    Text("Subscriptions")
                     .font(DesignSystem.Typography.titleMedium)
                     .foregroundColor(DesignSystem.Colors.text)
-                    
-                    Text("To access AI services, please complete your subscription payment.")
+
+                    Text("Zeroa does not sell a subscription in this version.")
                         .font(DesignSystem.Typography.bodyMedium)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                     
                     VStack(spacing: DesignSystem.Spacing.md) {
-                        PrimaryButton("Pay with TLS", isLoading: false) {
-                            // Process subscription
+                        PrimaryButton("Close", isLoading: false) {
                             dismiss()
                         }
-                        
-                        Text("10 TLS / month")
-                            .font(DesignSystem.Typography.bodySmall)
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
                     }
                 }
                 .padding(DesignSystem.Spacing.xl)
@@ -5101,7 +4966,7 @@ struct MenuView: View {
                         .font(DesignSystem.Typography.titleLarge)
                         .foregroundColor(DesignSystem.Colors.text)
                     
-                    Text("PAAI Settings & Options")
+                    Text("Wallet settings")
                         .font(DesignSystem.Typography.bodyMedium)
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -5110,16 +4975,17 @@ struct MenuView: View {
                 
                 // Menu Items
                 VStack(spacing: DesignSystem.Spacing.md) {
-                    // Hybrid Messaging
-                    NavigationLink(destination: HybridMessagingView()) {
-                        MenuItemView(
-                            icon: "network",
-                            title: "Hybrid Messaging",
-                            subtitle: "P2P + Layer 2 + Blockchain",
-                            color: .purple
-                        )
+                    if ZeroaFeatureFlags.switchboardEnabled {
+                        NavigationLink(destination: HybridMessagingView()) {
+                            MenuItemView(
+                                icon: "network",
+                                title: "Hybrid Messaging",
+                                subtitle: "P2P + Layer 2 + Blockchain",
+                                color: .purple
+                            )
+                        }
+                        .accessibilityIdentifier("menu.hybridMessaging")
                     }
-                    .accessibilityIdentifier("menu.hybridMessaging")
                     
                     // Settings
                     NavigationLink(destination: SettingsView(path: $path)) {

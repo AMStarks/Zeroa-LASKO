@@ -75,7 +75,7 @@ cd LASKO && xcodebuild -project LASKO.xcodeproj -scheme LASKO -destination 'plat
 
 # Install and launch Zeroa
 xcrun simctl install booted /path/to/Zeroa.app
-xcrun simctl launch booted com.telestai.Zeroa
+xcrun simctl launch booted com.zeroa.wallet
 
 # Install and launch LASKO
 xcrun simctl install booted /path/to/LASKO.app  

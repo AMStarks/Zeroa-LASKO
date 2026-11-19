@@ -1,6 +1,8 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import CoreImage
+import UIKit
 
 // MARK: - Send/Receive Models
 struct SendTransactionData {
@@ -31,7 +33,6 @@ struct SendTransactionView: View {
     @StateObject private var themeManager = ThemeManager.shared
     private let walletService = WalletService.shared
     @State private var transactionData = SendTransactionData()
-    @State private var showConfirmation = false
     @State private var showCoinPicker = false
     @State private var availableCoins: [CoinType] = []
     @State private var isLoading = false
@@ -264,7 +265,8 @@ struct SendTransactionView: View {
                     
                     // Send Button at Bottom
                     Button(action: {
-                        showConfirmation = true
+                        transactionData.successMessage = ""
+                        transactionData.errorMessage = "Nothing was sent. Zeroa does not broadcast transactions in this version."
                     }) {
                         HStack {
                             Image(systemName: "arrow.up")
@@ -301,6 +303,10 @@ struct SendTransactionView: View {
             loadSettings()
             loadCoinPrice()
             updateFeeEstimate()
+            if ZeroaDemoMode.isEnabled, transactionData.toAddress.isEmpty {
+                transactionData.toAddress = ZeroaDemoMode.demoSendRecipientAddress
+                transactionData.amount = "25.00000000"
+            }
         }
         .sheet(isPresented: $showCoinPicker) {
             CoinPickerView(selectedCoin: $transactionData.coinType, availableCoins: availableCoins)
@@ -309,14 +315,6 @@ struct SendTransactionView: View {
             QRScannerView { scannedAddress in
                 transactionData.toAddress = scannedAddress
             }
-        }
-        .alert("Confirm Transaction", isPresented: $showConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Send", role: .destructive) {
-                sendTransaction()
-            }
-        } message: {
-            Text("Are you sure you want to send \(transactionData.amount) \(transactionData.coinType.symbol) to \(transactionData.toAddress)?")
         }
     }
     
@@ -545,24 +543,6 @@ struct SendTransactionView: View {
                transactionData.errorMessage.isEmpty
     }
     
-    private func sendTransaction() {
-        isLoading = true
-        
-        Task {
-            // Simulate transaction sending
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            
-            await MainActor.run {
-                isLoading = false
-                transactionData.successMessage = "Transaction sent successfully!"
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    dismiss()
-                }
-            }
-        }
-    }
-    
     // MARK: - Helper Functions
     private func getPriorityColor(_ priority: SendTransactionRequest.TransactionPriority) -> Color {
         switch priority {
@@ -770,27 +750,39 @@ struct ReceiveTransactionView: View {
     private func generateReceiveAddress() {
         switch receiveData.coinType {
         case .telestai:
-            if let addr = walletService.loadAddress() { receiveData.address = addr } else { receiveData.address = "" }
+            if let addr = walletService.loadAddress(), !addr.isEmpty {
+                receiveData.address = addr
+            } else if ZeroaDemoMode.isEnabled {
+                receiveData.address = ZeroaDemoMode.demoTLSAddress
+            } else {
+                receiveData.address = ""
+            }
         case .flux:
-            receiveData.address = AppGroupsService.shared.getFluxAddress() ?? ""
+            receiveData.address = AppGroupsService.shared.getFluxAddress()
+                ?? (ZeroaDemoMode.isEnabled ? "t1demoFluxReceiveAddressZeroa999" : "")
         default:
-            receiveData.address = ""
+            receiveData.address = ZeroaDemoMode.isEnabled
+                ? "demo-\(receiveData.coinType.symbol.lowercased())-address-zeroa"
+                : ""
         }
         generateQRCode()
     }
     
     private func generateQRCode() {
-        // Generate QR code for the address
         let qrCodeString = receiveData.address
-        if let qrCodeData = generateQRCodeData(from: qrCodeString) {
-            receiveData.qrCodeData = qrCodeData
-        }
+        receiveData.qrCodeData = generateQRCodeData(from: qrCodeString)
     }
     
     private func generateQRCodeData(from string: String) -> Data? {
-        // Simple QR code generation - in real app, use a proper QR library
-        guard let data = string.data(using: .utf8) else { return nil }
-        return data
+        guard !string.isEmpty,
+              let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(Data(string.utf8), forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cgImage).pngData()
     }
     
     private func copyAddressToClipboard() {
@@ -803,7 +795,7 @@ struct ReceiveTransactionView: View {
         My \(receiveData.coinType.name) address:
         \(receiveData.address)
         
-        Sent from PAAI Wallet
+        Sent from Zeroa
         """
         
         let activityVC = UIActivityViewController(

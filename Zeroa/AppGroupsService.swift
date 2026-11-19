@@ -4,34 +4,18 @@ class AppGroupsService {
     static let shared = AppGroupsService()
     
     // App Group identifier - both apps will use this
-    private let appGroupIdentifier = "group.com.telestai.zeroa-lasko"
+    private let appGroupIdentifier = "group.com.tls.zeroa-lasko"
     let sharedDefaults: UserDefaults?
     
     init() {
-        sharedDefaults = UserDefaults(suiteName: appGroupIdentifier)
-        print("🔧 AppGroupsService initialized with group: \(appGroupIdentifier)")
-        
-        // Debug: Check if App Groups container is accessible
-        if let defaults = sharedDefaults {
+        if let suite = UserDefaults(suiteName: appGroupIdentifier) {
+            sharedDefaults = suite
+            print("🔧 AppGroupsService initialized with group: \(appGroupIdentifier)")
             print("✅ Zeroa: App Groups container accessible")
-            // Test write/read
-            defaults.set("test_from_zeroa", forKey: "test_key_zeroa")
-            if let testValue = defaults.string(forKey: "test_key_zeroa") {
-                print("✅ Zeroa: App Groups read/write test successful")
-                defaults.removeObject(forKey: "test_key_zeroa")
-            } else {
-                print("❌ Zeroa: App Groups read/write test failed")
-            }
-            
-            // Debug: List all existing keys
-            let allKeys = defaults.dictionaryRepresentation().keys
-            print("🔍 Zeroa: Existing keys in App Groups: \(Array(allKeys))")
         } else {
-            print("❌ Zeroa: App Groups container not accessible")
-            print("🔍 Zeroa: This might be due to:")
-            print("  - App Groups not configured in entitlements")
-            print("  - Provisioning profile doesn't include App Groups")
-            print("  - App Groups identifier mismatch")
+            // Wallet-only fallback when the App Group isn't on the App ID / profile yet.
+            sharedDefaults = .standard
+            print("⚠️ Zeroa: App Group \(appGroupIdentifier) unavailable — using UserDefaults.standard")
         }
     }
     

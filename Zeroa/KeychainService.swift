@@ -3,56 +3,63 @@ import Security
 
 class KeychainService {
     static let shared = KeychainService()
-    private let service = "com.yourname.PAAI" // Replace with your Organization Identifier
+    /// Current service name for wallet secrets under `com.zeroa.wallet`.
+    private let service = "com.zeroa.wallet"
+    /// Legacy service names from earlier bundle IDs — read + migrate on first access.
+    private let legacyServices = ["com.tls.Zeroa", "com.yourname.PAAI"]
+
+    private func query(account: String?, serviceName: String) -> [String: Any] {
+        var q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: serviceName
+        ]
+        if let account {
+            q[kSecAttrAccount as String] = account
+        }
+        return q
+    }
 
     func save(key: String, value: String) -> Bool {
-        if let data = value.data(using: .utf8) {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: key,
-                kSecValueData as String: data
-            ]
-            SecItemDelete(query as CFDictionary)
-            let status = SecItemAdd(query as CFDictionary, nil)
-            return status == errSecSuccess
-        }
-        return false
+        guard let data = value.data(using: .utf8) else { return false }
+        var q = query(account: key, serviceName: service)
+        SecItemDelete(q as CFDictionary)
+        q[kSecValueData as String] = data
+        return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
     }
 
     func read(key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var dataTypeRef: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &dataTypeRef)
-        if status == errSecSuccess, let data = dataTypeRef as? Data,
-           let value = String(data: data, encoding: .utf8) {
-            return value
+        for serviceName in [service] + legacyServices {
+            var q = query(account: key, serviceName: serviceName)
+            q[kSecReturnData as String] = true
+            q[kSecMatchLimit as String] = kSecMatchLimitOne
+            var dataTypeRef: AnyObject?
+            let status = SecItemCopyMatching(q as CFDictionary, &dataTypeRef)
+            if status == errSecSuccess, let data = dataTypeRef as? Data,
+               let value = String(data: data, encoding: .utf8) {
+                if serviceName != service {
+                    _ = save(key: key, value: value)
+                }
+                return value
+            }
         }
         return nil
     }
 
     func delete(key: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess
+        var ok = false
+        for serviceName in [service] + legacyServices {
+            let status = SecItemDelete(query(account: key, serviceName: serviceName) as CFDictionary)
+            if status == errSecSuccess || status == errSecItemNotFound { ok = true }
+        }
+        return ok
     }
 
     func deleteAll() -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        var ok = false
+        for serviceName in [service] + legacyServices {
+            let status = SecItemDelete(query(account: nil, serviceName: serviceName) as CFDictionary)
+            if status == errSecSuccess || status == errSecItemNotFound { ok = true }
+        }
+        return ok
     }
 }
