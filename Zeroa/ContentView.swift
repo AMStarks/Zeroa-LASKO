@@ -4027,7 +4027,7 @@ struct SupportView: View {
                                         .foregroundColor(DesignSystem.Colors.text)
                                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                                    Text("Open the menu, then Settings, then Delete Account. Deleting the account does not affect on-chain funds. Back up your recovery phrase first.")
+                                    Text("Open the menu, then Settings, then Delete Account. Your posts will remain, shown as deleted user, with your TLS address. Deleting the account does not affect on-chain funds. Back up your recovery phrase first.")
                                         .font(DesignSystem.Typography.caption)
                                         .foregroundColor(DesignSystem.Colors.textSecondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)

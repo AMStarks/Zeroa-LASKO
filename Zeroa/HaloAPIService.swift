@@ -114,7 +114,7 @@ final class HaloAPIService {
     }
 
     /// Deletes the Halo account for this wallet. The caller must already hold a fresh challenge signature.
-    func deleteAccount(address: String, bundleId: String, nonce: String, signature: String, pubkeyCompressedHex: String) async throws {
+    func deleteAccount(address: String, bundleId: String, nonce: String, signature: String, pubkeyCompressedHex: String, displayName: String) async throws {
         let url = baseURL.appendingPathComponent("halo/account/delete")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -126,7 +126,8 @@ final class HaloAPIService {
             "bundleId": bundleId,
             "nonce": nonce,
             "signature": signature,
-            "pubkey": pubkeyCompressedHex
+            "pubkey": pubkeyCompressedHex,
+            "displayName": displayName
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
         let (data, response) = try await URLSession.shared.data(for: req)

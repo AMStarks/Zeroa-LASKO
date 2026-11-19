@@ -13,7 +13,7 @@ Messaging and AI are not in the menu. Their network clients stay off.
 2. Open the bottom menu, then **Settings**, then **Delete Account**. The same button is on **Profile**.
 3. The screen says deleting the account does not affect on-chain funds, and it asks the user to back up the recovery phrase.
 4. Turn on **I have written down my recovery phrase**, tap **Delete Account**, then confirm.
-5. The app signs a Halo challenge and calls `POST https://halo.telestai.io/api/halo/account/delete`. That deletes the Halo account data for the wallet address (sign-in material and indexed posts). It does not move coins.
+5. The app signs a Halo challenge and calls `POST https://halo.telestai.io/api/halo/account/delete`. Posts stay in place and are shown as "deleted user - <name>", with the TLS address still visible. Profile, sign-in sessions, and contact details are removed. It does not move coins.
 6. After Halo accepts the deletion, the app wipes the wallet from this device and returns to the login screen.
 
 There is no website step. Deletion finishes in the app.

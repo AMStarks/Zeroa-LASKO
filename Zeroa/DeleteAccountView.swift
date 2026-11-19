@@ -24,7 +24,7 @@ struct DeleteAccountView: View {
                             .font(DesignSystem.Typography.titleMedium)
                             .foregroundColor(DesignSystem.Colors.text)
 
-                        Text("This permanently deletes your Zeroa account and the account data Halo stores for this wallet address. That includes your Halo sign-in and any indexed posts tied to the address.")
+                        Text("This deletes your Zeroa account. Your posts will remain, shown as deleted user, along with your TLS address, so existing conversations stay intact. Your profile, sign-in sessions, and contact details are removed.")
                             .font(DesignSystem.Typography.bodyMedium)
                             .foregroundColor(DesignSystem.Colors.textSecondary)
 
@@ -95,7 +95,7 @@ struct DeleteAccountView: View {
                 Task { await performDeletion() }
             }
         } message: {
-            Text("Halo will delete the account data for this wallet. On-chain funds are not affected. This cannot be undone on this device.")
+            Text("Your posts will remain, shown as deleted user, with your TLS address. Profile, sessions, and contact details are removed. On-chain funds are not affected. This cannot be undone on this device.")
         }
         .interactiveDismissDisabled(isDeleting)
     }

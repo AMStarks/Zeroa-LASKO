@@ -59,12 +59,14 @@ final class HaloService: ObservableObject {
               !pubHex.isEmpty else {
             throw HaloAccountDeletionError.signatureFailed
         }
+        let displayName = UserDefaults.standard.string(forKey: "user_display_name") ?? ""
         try await api.deleteAccount(
             address: address,
             bundleId: bundleId,
             nonce: challenge.nonce,
             signature: signature,
-            pubkeyCompressedHex: pubHex
+            pubkeyCompressedHex: pubHex,
+            displayName: displayName
         )
         api.clearStoredToken()
         self.isAuthenticated = false
